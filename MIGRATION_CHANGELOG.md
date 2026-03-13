@@ -271,6 +271,21 @@ Notes:
 Validation:
 - `npm run lint` passed.
 
+## 45) Styled Magic-Link And Reset Emails (2026-03-14)
+
+User request:
+- Make the magic-link email and password-reset email look more stylish and closer to the login page style.
+
+Files updated:
+- `lib/authEmailTemplate.js`
+- `app/api/auth/magic-link/route.js`
+- `app/api/auth/reset-password/route.js`
+
+Changes:
+- Added a shared auth email template with a dark Volvox Works visual style: centered card layout, muted black/zinc palette, branded heading, accent top strip, and stronger CTA button.
+- Switched both the magic-link and password-reset flows to use the shared template so they stay visually consistent.
+- Added plain-text versions alongside the HTML emails for better deliverability and client fallback behavior.
+
 ## 43) Stable Page Scroll Height When Toggling Edit Mode (2026-03-14)
 
 User request:

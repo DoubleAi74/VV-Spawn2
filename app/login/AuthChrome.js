@@ -89,7 +89,7 @@ export function AuthShell({ children, compact = false }) {
           className="absolute inset-0 hidden bg-cover bg-center md:block"
           style={{ backgroundImage: "url('/background-1920.webp')" }}
         />
-        <div className="absolute inset-0 pointer-events-none bg-black/30" />
+        <div className="absolute inset-0 pointer-events-none bg-black/20" />
       </div>
 
       <div className="relative z-10 flex min-h-[100svh] flex-col items-center justify-start px-4 pt-[14svh] md:min-h-screen md:justify-center md:pt-0">

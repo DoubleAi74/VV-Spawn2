@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { connectDB } from '@/lib/db';
 import User from '@/lib/models/User';
 import PasswordResetToken from '@/lib/models/PasswordResetToken';
+import { buildAuthEmail } from '@/lib/authEmailTemplate';
 import { Resend } from 'resend';
 
 const TOKEN_TTL_MINUTES = 60;
@@ -46,17 +47,24 @@ export async function POST(request) {
   const FROM_EMAIL = process.env.RESEND_FROM_EMAIL;
   const APP_URL = process.env.NEXTAUTH_URL;
   const resetUrl = `${APP_URL}/login?reset=${token}`;
+  const { html, text } = buildAuthEmail({
+    preheader: 'Reset your Volvox Works password.',
+    title: 'Reset your password',
+    message:
+      'We received a request to reset the password for your Volvox Works account. Use the button below to choose a new password.',
+    actionLabel: 'Reset Password',
+    actionUrl: resetUrl,
+    actionHint: 'This reset link works once and takes you straight to the password form.',
+    expiryLabel: `This link expires in ${TOKEN_TTL_MINUTES} minutes.`,
+    footer: "If you didn't request this, you can safely ignore this email.",
+  });
 
   await resend.emails.send({
     from: FROM_EMAIL,
     to: email,
     subject: 'Reset your volvox.works password',
-    html: `
-      <p>You requested a password reset for your volvox.works account.</p>
-      <p>Click the button below to set a new password. This link expires in ${TOKEN_TTL_MINUTES} minutes.</p>
-      <p><a href="${resetUrl}" style="background:#2d3e50;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;">Reset password</a></p>
-      <p>If you didn't request this, you can safely ignore this email.</p>
-    `,
+    html,
+    text,
   });
 
   return NextResponse.json({ success: true });
