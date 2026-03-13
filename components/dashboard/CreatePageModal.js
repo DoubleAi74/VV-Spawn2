@@ -96,9 +96,6 @@ export default function CreatePageModal({ onClose, onCreate }) {
   return (
     <div
       className="fixed inset-0 bg-black/20 flex items-center justify-center z-[200] p-4"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
     >
       <div className="bg-neutral-900/90 backdrop-blur-[4px] border border-white/[0.08] rounded-[5px] p-6 w-full max-w-md shadow-2xl shadow-black/50">
         <div className="flex justify-between items-center mb-6">

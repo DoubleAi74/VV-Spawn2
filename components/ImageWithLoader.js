@@ -39,10 +39,15 @@ export default function ImageWithLoader({
 }) {
   const srcKey = makeSrcKey(src);
   const [isLoading, setIsLoading] = useState(() => (srcKey ? !loadedSrcCache.has(srcKey) : false));
+  const [shouldAnimateReveal, setShouldAnimateReveal] = useState(() =>
+    Boolean(srcKey) && !loadedSrcCache.has(srcKey)
+  );
   const [hasError, setHasError] = useState(false);
 
   useEffect(() => {
-    setIsLoading(srcKey ? !loadedSrcCache.has(srcKey) : false);
+    const needsFirstReveal = srcKey ? !loadedSrcCache.has(srcKey) : false;
+    setIsLoading(needsFirstReveal);
+    setShouldAnimateReveal(needsFirstReveal);
     setHasError(false);
   }, [srcKey]);
 
@@ -57,6 +62,15 @@ export default function ImageWithLoader({
   }, []);
 
   const shouldUseNextBlur = Boolean(useNextBlurPlaceholder && blurDataURL && isLoading);
+  const revealClassName = shouldAnimateReveal
+    ? blurDataURL
+      ? `transition-opacity duration-700 ease-out will-change-[opacity] ${
+          isLoading ? 'opacity-0' : 'opacity-100'
+        }`
+      : `transition-[opacity,filter] duration-700 ease-out will-change-[opacity,filter] ${
+          isLoading ? 'opacity-0 blur-[10px]' : 'opacity-100 blur-0'
+        }`
+    : '';
 
   const imageProps = {
     src,
@@ -64,7 +78,7 @@ export default function ImageWithLoader({
     onLoadingComplete: handleLoadingComplete,
     onError: handleError,
     style,
-    className,
+    className: `${className} ${revealClassName}`.trim(),
     ...(shouldUseNextBlur ? { placeholder: 'blur', blurDataURL } : { placeholder: 'empty' }),
   };
 

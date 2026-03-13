@@ -50,8 +50,8 @@ export default function RichTextEditor({
             align-items: center;
             flex-wrap: nowrap;
             gap: 6px;
-            overflow-x: auto;
-            overflow-y: hidden;
+            position: relative;
+            z-index: 20;
           }
           #${editorId} .ql-toolbar .ql-formats {
             display: flex;
@@ -60,9 +60,15 @@ export default function RichTextEditor({
             white-space: nowrap;
             flex-shrink: 0;
           }
+          #${editorId} .ql-toolbar .ql-picker {
+            position: relative;
+            z-index: 30;
+          }
           #${editorId} .ql-container {
             border: none !important;
             font-size: 14px;
+            position: relative;
+            z-index: 0;
           }
           #${editorId} .ql-editor {
             color: rgb(255 255 255 / 0.9);
@@ -122,6 +128,7 @@ export default function RichTextEditor({
             border: 1px solid rgb(255 255 255 / 0.15);
             border-radius: 4px;
             box-shadow: 0 4px 12px rgb(0 0 0 / 0.3);
+            z-index: 40;
           }
           #${editorId} .ql-toolbar .ql-picker-item { color: rgb(255 255 255 / 0.7); }
         `
@@ -140,8 +147,8 @@ export default function RichTextEditor({
             align-items: center;
             flex-wrap: nowrap;
             gap: 6px;
-            overflow-x: auto;
-            overflow-y: hidden;
+            position: relative;
+            z-index: 20;
           }
           #${editorId} .ql-toolbar .ql-formats {
             display: flex;
@@ -150,9 +157,15 @@ export default function RichTextEditor({
             white-space: nowrap;
             flex-shrink: 0;
           }
+          #${editorId} .ql-toolbar .ql-picker {
+            position: relative;
+            z-index: 30;
+          }
           #${editorId} .ql-container {
             border: none !important;
             font-size: 14px;
+            position: relative;
+            z-index: 0;
           }
           #${editorId} .ql-editor {
             color: rgb(38 38 38);
@@ -172,11 +185,8 @@ export default function RichTextEditor({
           }
         `
         }
-        #${editorId} .ql-toolbar::-webkit-scrollbar {
-          display: none;
-        }
-        #${editorId} .ql-toolbar {
-          scrollbar-width: none;
+        #${editorId} .ql-toolbar .ql-picker-options {
+          z-index: 40;
         }
       `}</style>
 

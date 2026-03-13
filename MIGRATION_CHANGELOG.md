@@ -271,6 +271,78 @@ Notes:
 Validation:
 - `npm run lint` passed.
 
+## 43) Stable Page Scroll Height When Toggling Edit Mode (2026-03-14)
+
+User request:
+- On pages, toggling edit mode at the bottom was moving the card grid up and down, unlike the dashboard.
+
+Files updated:
+- `components/page/PageViewClient.js`
+- `components/page/PageInfoEditor.js`
+
+Changes:
+- Identified the page-only layout shift source: the bottom page info editor was adding/removing height when edit mode changed.
+- Normalized the page info editor bottom spacing so its own margin no longer changes between view and edit mode.
+- Added page-level bottom-space reservation when the owner is viewing a page with no visible info content, so toggling edit on/off no longer changes the total scroll height at the bottom of the page.
+- Kept the reservation tied to the live info-content state, so once page info exists the page uses the normal layout.
+
+Validation:
+- `npm run lint` passed.
+
+## 42) Smooth Crossfade Image Reveal Refinement (2026-03-14)
+
+User follow-up:
+- The first-load image reveal looked like a blur pulse rather than a smooth emergence from blurred to clear.
+
+Files updated:
+- `components/ImageWithLoader.js`
+
+Changes:
+- Removed the extra internal blur-overlay layer from the shared image component.
+- Changed the first-load reveal for images with `blurDataURL` to a pure opacity crossfade over the existing blurred card background, so the initial blurred impression stays stable while the sharp image fades in.
+- Kept a softer fallback blur+fade only for images that do not have a blur placeholder available.
+
+Validation:
+- `npm run lint` passed.
+
+## 41) First-Load Image Reveal For Page And Dashboard Cards (2026-03-14)
+
+User request:
+- Prevent the jarring first-load image snap on dashboards and pages with a sleek fade-in from blur that only happens on first load.
+
+Files updated:
+- `components/ImageWithLoader.js`
+- `app/[usernameTag]/loading.js`
+- `app/[usernameTag]/[pageSlug]/loading.js`
+
+Changes:
+- Reused the existing in-session image cache in `ImageWithLoader` to detect images that have not been shown yet in the current client session.
+- Added a first-load-only reveal animation on uncached images:
+  - blurred/transparent image state while decoding,
+  - smooth fade to sharp image on completion,
+  - optional blur placeholder overlay using the stored `blurDataURL`.
+- Applied the same shared image behavior to dashboard and page loading shells so route loading states and live cards reveal consistently.
+- Kept the animation free of any scale transform to avoid the earlier jarring size-change effect.
+
+Validation:
+- `npm run lint` passed.
+
+## 40) Rich-Text Dropdown Layering Fix (2026-03-14)
+
+User follow-up:
+- The rich-text font-size dropdown was being obscured by the editor content and should render on top.
+
+Files updated:
+- `components/page/RichTextEditor.js`
+
+Changes:
+- Removed the toolbar overflow behavior that was clipping the Quill picker menu after the single-line toolbar adjustment.
+- Added explicit stacking order so the toolbar and its dropdown options render above the editor content area.
+- Kept the toolbar controls on one row without reintroducing the wrapped `B I U` layout.
+
+Validation:
+- `npm run lint` passed.
+
 ## 39) Restore Rich-Text Expansion + Single-Line Toolbar (2026-03-13)
 
 User follow-up:
@@ -897,3 +969,17 @@ Changes:
 
 Validation:
 - `npm run lint` passed.
+
+## 44) Bulk Upload Post Slug Collision Fix (2026-03-14)
+
+User issue:
+- Parallel image uploads could fail with Mongo duplicate-key errors on the `(pageId, slug)` post index.
+
+Files updated:
+- `lib/data.js`
+
+Changes:
+- Identified the root cause in `createPost()`: multiple concurrent creates were all resolving the same base slug (for example `photo`) before insert, then colliding on the unique index.
+- Changed post creation to reserve `postCount` atomically up front, which also gives each concurrent post a stable unique `order_index`.
+- Added duplicate-key retry logic for post slug creation so concurrent inserts fall back to a new unique slug instead of returning a 500.
+- Added rollback of the reserved `postCount` if post creation fails after reservation.

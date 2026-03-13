@@ -16,6 +16,10 @@ import BulkUploadModal from "@/components/page/BulkUploadModal";
 import PhotoShowModal from "@/components/page/PhotoShowModal";
 import { lighten, hexToRgba } from "@/components/dashboard/DashHeader";
 
+function hasVisiblePageInfo(value) {
+  return Boolean(value && value !== "<p><br></p>" && value.trim() !== "");
+}
+
 export default function PageViewClient({ user, page, initialPosts }) {
   const { user: sessionUser } = useAuth();
   const { dashHex, backHex } = useTheme();
@@ -30,6 +34,9 @@ export default function PageViewClient({ user, page, initialPosts }) {
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [bulkFiles, setBulkFiles] = useState([]);
   const [lightboxPost, setLightboxPost] = useState(null);
+  const [hasPageInfoContent, setHasPageInfoContent] = useState(() =>
+    hasVisiblePageInfo(page.pageMetaData?.infoText2 || ""),
+  );
   const prefetchedRoutesRef = useRef(new Set());
 
   const lightboxPosts = posts.filter((p) => !p._optimistic);
@@ -48,6 +55,12 @@ export default function PageViewClient({ user, page, initialPosts }) {
   useEffect(() => {
     prefetchRoute(dashboardHref);
   }, [prefetchRoute, dashboardHref]);
+
+  useEffect(() => {
+    setHasPageInfoContent(
+      hasVisiblePageInfo(page.pageMetaData?.infoText2 || ""),
+    );
+  }, [page._id, page.pageMetaData?.infoText2]);
 
   useEffect(() => {
     if (!user?.usernameTag || !page?.slug) return;
@@ -160,7 +173,7 @@ export default function PageViewClient({ user, page, initialPosts }) {
 
   // ── Delete post ──
   function handleDeletePost(post) {
-    if (!confirm(`Delete "${post.title || "this post"}"?`)) return;
+    // if (!confirm(`Delete "${post.title || "this post"}"?`)) return;
     setPosts((p) => p.filter((x) => x._id !== post._id));
 
     enqueue({
@@ -221,6 +234,8 @@ export default function PageViewClient({ user, page, initialPosts }) {
     setLightboxPost(post);
   }
 
+  const reserveHiddenInfoSpace = isOwner && !isEditMode && !hasPageInfoContent;
+
   return (
     <div
       className="min-h-screen w-full p-0 md:px-6 overscroll-none flex flex-col"
@@ -266,10 +281,10 @@ export default function PageViewClient({ user, page, initialPosts }) {
                 <button
                   type="button"
                   onClick={() => setIsEditMode((m) => !m)}
-                  className={`h-8 px-2.5 rounded-[3px] border text-xs sm:text-sm font-medium transition-all ${
+                  className={`h-8  rounded-[3px] border text-sm font-medium  ${
                     isEditMode
-                      ? "bg-white text-neutral-900 border-white"
-                      : "bg-white/10 text-white/80 border-white/20 hover:bg-white/15 hover:text-white"
+                      ? "bg-white/20 text-white/90 border-white/30 hover:bg-white/25 hover:text-white w-[67px]"
+                      : "bg-white/10 text-white/80 border-white/20 hover:bg-white/15 hover:text-white  w-[67px]"
                   }`}
                   aria-pressed={isEditMode}
                 >
@@ -299,8 +314,13 @@ export default function PageViewClient({ user, page, initialPosts }) {
       </header>
 
       <main
-        className="w-full flex-1 px-2 sm:px-4 md:px-5 pt-[1.6rem] pb-72"
-        style={{ backgroundColor: hexToRgba(backHex, 1) }}
+        className="w-full flex-1 px-2 sm:px-4 md:px-5 pt-[1.8rem]"
+        style={{
+          backgroundColor: hexToRgba(backHex, 1),
+          paddingBottom: reserveHiddenInfoSpace
+            ? "calc(18rem + 88px)"
+            : "18rem",
+        }}
       >
         <div className="max-w-7xl mx-auto">
           {posts.length === 0 && !isEditMode && (
@@ -329,6 +349,7 @@ export default function PageViewClient({ user, page, initialPosts }) {
               initialText1={page.pageMetaData?.infoText1 || ""}
               initialText2={page.pageMetaData?.infoText2 || ""}
               isEditMode={isOwner && isEditMode}
+              onHasContentChange={setHasPageInfoContent}
             />
           </div>
         </div>
@@ -336,8 +357,13 @@ export default function PageViewClient({ user, page, initialPosts }) {
 
       {isOwner && isEditMode && (
         <nav
-          className="fixed bottom-0 left-0 right-0 z-40 flex justify-end gap-3 px-4 sm:px-6 py-4 bg-neutral-900/75 backdrop-blur-[5px] border-t border-white/10"
+          className="fixed bottom-0 right-0 z-40 flex justify-end gap-3 px-4 sm:px-6 py-3 bg-neutral-900/50 backdrop-blur-[5px] border-t border-white/10"
           aria-label="Post actions"
+          style={{
+            width: "30vw",
+            minWidth: "280px",
+            clipPath: "polygon(36.8% 0%, 100% 0%, 100% 100%, 0% 100%)",
+          }}
         >
           <button
             type="button"

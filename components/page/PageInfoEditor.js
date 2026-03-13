@@ -93,6 +93,7 @@ export default function PageInfoEditor({
   initialText1,
   initialText2,
   isEditMode,
+  onHasContentChange,
 }) {
   const [text1, setText1] = useState(initialText1 || "");
   const [text2, setText2] = useState(initialText2 || "");
@@ -151,6 +152,10 @@ export default function PageInfoEditor({
 
   const hasText2 = text2 && text2 !== "<p><br></p>" && text2.trim() !== "";
 
+  useEffect(() => {
+    onHasContentChange?.(hasText2);
+  }, [hasText2, onHasContentChange]);
+
   if (!isEditMode && !hasText2) return null;
 
   const status2 = saving
@@ -158,7 +163,7 @@ export default function PageInfoEditor({
     : error || (text2 === serverText2 ? "Saved" : "Unsaved");
 
   return (
-    <div className={isEditMode ? "mb-6" : "mb-5"}>
+    <div className="mb-6">
       <HtmlInfoEditor
         value={text2}
         onChange={setText2}

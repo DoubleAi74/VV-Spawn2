@@ -1,14 +1,14 @@
-'use client';
+"use client";
 
-import { useEffect, useRef } from 'react';
-import Link from 'next/link';
-import { LogOut, Edit2, Eye } from 'lucide-react';
-import { signOut } from 'next-auth/react';
-import TitleEdit from '@/components/dashboard/TitleEdit';
-import { useTheme } from '@/context/ThemeContext';
+import { useEffect, useRef } from "react";
+import Link from "next/link";
+import { LogOut, Edit2, Eye } from "lucide-react";
+import { signOut } from "next-auth/react";
+import TitleEdit from "@/components/dashboard/TitleEdit";
+import { useTheme } from "@/context/ThemeContext";
 
-function normalizeHex(hex, fallback = '#000000') {
-  const value = String(hex || '').trim();
+function normalizeHex(hex, fallback = "#000000") {
+  const value = String(hex || "").trim();
   if (/^#[0-9a-fA-F]{6}$/.test(value)) return value;
   if (/^[0-9a-fA-F]{6}$/.test(value)) return `#${value}`;
   return fallback;
@@ -16,7 +16,7 @@ function normalizeHex(hex, fallback = '#000000') {
 
 export function lighten(hex, amount = 30) {
   const safeHex = normalizeHex(hex);
-  const clean = safeHex.replace('#', '');
+  const clean = safeHex.replace("#", "");
   let r = parseInt(clean.substring(0, 2), 16);
   let g = parseInt(clean.substring(2, 4), 16);
   let b = parseInt(clean.substring(4, 6), 16);
@@ -25,13 +25,13 @@ export function lighten(hex, amount = 30) {
   g = Math.max(0, Math.min(255, g + amount));
   b = Math.max(0, Math.min(255, b + amount));
 
-  const toHex = (v) => v.toString(16).padStart(2, '0');
+  const toHex = (v) => v.toString(16).padStart(2, "0");
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
 export function hexToRgba(hex, alpha = 1) {
   const safeHex = normalizeHex(hex);
-  const clean = safeHex.replace('#', '');
+  const clean = safeHex.replace("#", "");
   const r = parseInt(clean.substring(0, 2), 16);
   const g = parseInt(clean.substring(2, 4), 16);
   const b = parseInt(clean.substring(4, 6), 16);
@@ -54,15 +54,15 @@ export default function DashHeader({
     () => () => {
       if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
     },
-    []
+    [],
   );
 
   function queuePersist(nextDash, nextBack) {
     if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
     persistTimerRef.current = setTimeout(async () => {
-      await fetch('/api/user/colours', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+      await fetch("/api/user/colours", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ dashHex: nextDash, backHex: nextBack }),
       }).catch(() => {});
     }, 280);
@@ -83,7 +83,7 @@ export default function DashHeader({
       className="left-0 right-0 z-40 border-b border-black/10 backdrop-blur-md shadow-sm"
       style={{
         backgroundColor: dashHex,
-        paddingTop: 'env(safe-area-inset-top, 0px)',
+        paddingTop: "env(safe-area-inset-top, 0px)",
       }}
     >
       <div className="w-full px-6 sm:px-8">
@@ -119,7 +119,10 @@ export default function DashHeader({
             )}
           </div>
 
-          <nav className="hidden sm:flex items-center gap-2 shrink-0" aria-label="Dashboard actions">
+          <nav
+            className="hidden sm:flex items-center gap-2 shrink-0"
+            aria-label="Dashboard actions"
+          >
             {isOwner ? (
               <>
                 <span className="text-white/70 text-xs hidden md:block truncate max-w-[160px]">
@@ -128,21 +131,21 @@ export default function DashHeader({
                 <button
                   type="button"
                   onClick={onToggleEdit}
-                  className={`h-9 px-3 rounded-[3px] border text-sm font-medium transition-all ${
+                  className={`h-9  rounded-[3px] border text-sm font-medium  ${
                     isEditMode
-                      ? 'bg-white text-neutral-900 border-white'
-                      : 'bg-white/10 text-white/80 border-white/20 hover:bg-white/15 hover:text-white'
+                      ? "bg-white/20 text-white/90 border-white/30 hover:bg-white/25 hover:text-white w-[67px]"
+                      : "bg-white/10 text-white/80 border-white/20 hover:bg-white/15 hover:text-white  w-[67px]"
                   }`}
                   aria-pressed={isEditMode}
                 >
                   <span className="inline-flex items-center gap-1.5">
                     {isEditMode ? <Eye size={14} /> : <Edit2 size={14} />}
-                    {isEditMode ? 'View' : 'Edit'}
+                    {isEditMode ? "View" : "Edit"}
                   </span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => signOut({ callbackUrl: '/login' })}
+                  onClick={() => signOut({ callbackUrl: "/login" })}
                   className="h-9 w-9 grid place-items-center rounded-[3px] border border-white/20 bg-white/10 text-white/80 hover:bg-white/15 hover:text-white transition-all"
                   aria-label="Sign out"
                 >
@@ -160,7 +163,10 @@ export default function DashHeader({
           </nav>
         </div>
 
-        <nav className="sm:hidden flex items-center justify-end gap-2 pb-2" aria-label="Dashboard actions mobile">
+        <nav
+          className="sm:hidden flex items-center justify-end gap-2 pb-2"
+          aria-label="Dashboard actions mobile"
+        >
           {isOwner ? (
             <>
               {isEditMode && (
@@ -186,15 +192,15 @@ export default function DashHeader({
                 onClick={onToggleEdit}
                 className={`h-8 px-2.5 rounded-[3px] border text-xs font-medium transition-all ${
                   isEditMode
-                    ? 'bg-white text-neutral-900 border-white'
-                    : 'bg-white/10 text-white/80 border-white/20 hover:bg-white/15 hover:text-white'
+                    ? "bg-white text-neutral-900 border-white"
+                    : "bg-white/10 text-white/80 border-white/20 hover:bg-white/15 hover:text-white"
                 }`}
               >
-                {isEditMode ? 'View' : 'Edit'}
+                {isEditMode ? "View" : "Edit"}
               </button>
               <button
                 type="button"
-                onClick={() => signOut({ callbackUrl: '/login' })}
+                onClick={() => signOut({ callbackUrl: "/login" })}
                 className="h-8 w-8 grid place-items-center rounded-[3px] border border-white/20 bg-white/10 text-white/80 hover:bg-white/15 hover:text-white transition-all"
                 aria-label="Sign out"
               >

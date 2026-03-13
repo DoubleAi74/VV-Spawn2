@@ -93,7 +93,7 @@ export default function PostCard({
       <button
         type="button"
         onClick={handleClick}
-        className="w-full p-1 rounded-[2px] bg-neutral-200/60 shadow-lg hover:bg-neutral-300/50 border-[3px] border-neutral-800/20 transition-all duration-100 cursor-pointer h-full flex flex-col text-neutral-800/80 hover:text-neutral-900 focus-visible:ring-2 focus-visible:ring-neutral-700"
+        className="w-full p-1 rounded-[2px] bg-neutral-200/60 shadow-lg hover:bg-neutral-300/50 border-[3px] border-neutral-800/20 transition-all duration-100 cursor-pointer h-full flex flex-col text-left text-neutral-800/80 hover:text-neutral-900 focus-visible:ring-2 focus-visible:ring-neutral-700"
         aria-label={`Open: ${post.title || post.content_type}`}
       >
         <div

@@ -265,9 +265,27 @@ export default function DashboardViewClient({ user, initialPages }) {
       </main>
 
       {isOwner && isEditMode && (
+        // <nav
+        //   className="fixed bottom-0 left-0 right-0 z-40 flex justify-end gap-3 px-4 sm:px-6 py-4 bg-neutral-900/75 backdrop-blur-[5px] border-t border-white/10"
+        //   aria-label="Page actions"
+        // >
+        //   <button
+        //     type="button"
+        //     onClick={() => setShowCreate(true)}
+        //     className="flex items-center gap-2 px-4 py-2.5 rounded-[3px] bg-neutral-100/90 text-neutral-900 font-semibold hover:bg-neutral-100 active:bg-neutral-100/80 transition-all duration-100 shadow-lg shadow-white/10"
+        //   >
+        //     <Plus size={16} />
+        //     New Page
+        //   </button>
+        // </nav>
         <nav
-          className="fixed bottom-0 left-0 right-0 z-40 flex justify-end gap-3 px-4 sm:px-6 py-4 bg-neutral-900/75 backdrop-blur-[5px] border-t border-white/10"
+          className="fixed bottom-0 right-0 z-40 flex justify-end gap-3 px-4 sm:px-6 py-3 bg-neutral-900/50 backdrop-blur-[5px] border-t border-white/10"
           aria-label="Page actions"
+          style={{
+            width: "30vw",
+            minWidth: "280px",
+            clipPath: "polygon(36.8% 0%, 100% 0%, 100% 100%, 0% 100%)",
+          }}
         >
           <button
             type="button"

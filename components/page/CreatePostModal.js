@@ -321,9 +321,6 @@ export default function CreatePostModal({
   return (
     <div
       className="fixed inset-0 z-[200] bg-black/20 flex items-center justify-center p-4"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
     >
       <div className="bg-neutral-900/90 backdrop-blur-[4px] border border-white/[0.08] rounded-[5px] p-6 w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl shadow-black/50">
         <div className="flex justify-between items-center mb-6 flex-shrink-0">
