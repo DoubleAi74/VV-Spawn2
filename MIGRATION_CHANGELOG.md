@@ -271,6 +271,26 @@ Notes:
 Validation:
 - `npm run lint` passed.
 
+## 46) Public Admin Dashboard Route (2026-03-14)
+
+User request:
+- Add a simple admin dashboard with no login required that lists every user account with page and post counts, plus a link to that user's dashboard.
+
+Files updated:
+- `lib/data.js`
+- `app/admin/page.js`
+
+Changes:
+- Added `getAdminUserSummaries()` to collect all users plus aggregate page/post totals from the `Page` collection.
+- Added a new public server-rendered `/admin` route.
+- Built a simple dark dashboard view that shows:
+  - `usernameTitle`
+  - `@usernameTag`
+  - page count
+  - post count
+  - direct link to `/${usernameTag}`
+- Included top-level totals for users, pages, and posts.
+
 ## 45) Styled Magic-Link And Reset Emails (2026-03-14)
 
 User request:
