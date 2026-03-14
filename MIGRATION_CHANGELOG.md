@@ -271,6 +271,21 @@ Notes:
 Validation:
 - `npm run lint` passed.
 
+## 48) Mobile Photo Modal Text Margins (2026-03-14)
+
+User request:
+- Keep the current desktop description margins in `PhotoShowModal`, but reduce them on mobile so the text column is not overly narrow.
+
+Files updated:
+- `components/page/PhotoShowModal.js`
+
+Changes:
+- Switched the description wrapper padding to responsive values:
+  - smaller horizontal padding on mobile
+  - moderate padding on small tablet
+  - unchanged `87px` padding from `md` upward
+- Left the typesetting logic untouched so the existing resize observer recalculates line breaks against the new mobile text width automatically.
+
 ## 46) Public Admin Dashboard Route (2026-03-14)
 
 User request:
@@ -1018,3 +1033,23 @@ Changes:
 - Changed post creation to reserve `postCount` atomically up front, which also gives each concurrent post a stable unique `order_index`.
 - Added duplicate-key retry logic for post slug creation so concurrent inserts fall back to a new unique slug instead of returning a 500.
 - Added rollback of the reserved `postCount` if post creation fails after reservation.
+
+## 47) Numeric Order Index Editing For Posts And Pages (2026-03-14)
+
+User request:
+- Restore numeric grid-position editing in `EditPostModal` and `EditPageModal`, matching the original behavior.
+
+Files updated:
+- `lib/ordering.js`
+- `lib/data.js`
+- `components/page/EditPostModal.js`
+- `components/dashboard/EditPageModal.js`
+- `components/page/PageViewClient.js`
+- `components/dashboard/DashboardViewClient.js`
+
+Changes:
+- Added a shared order-index helper for clamping and optimistic list reordering.
+- Added numeric `Order Index` inputs back into both edit modals and bound them to the current item position.
+- Passed list counts into the modals so position edits are bounded to valid 1-based ranges.
+- Restored optimistic sibling shifting in the page/dashboard client views so saving a new index immediately reorders the grid.
+- Extended the data layer so page and post PATCH updates now persist `order_index` moves by shifting affected siblings on the server.

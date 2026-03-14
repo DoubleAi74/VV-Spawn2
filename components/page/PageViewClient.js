@@ -6,6 +6,7 @@ import { Plus, Edit2, Eye, LogOut, ArrowLeft } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
+import { reorderItemsByIndex } from "@/lib/ordering";
 import { useQueue } from "@/lib/useQueue";
 import { setPageSnapshot } from "@/lib/routeTransitionCache";
 import PostCard from "@/components/page/PostCard";
@@ -88,6 +89,13 @@ export default function PageViewClient({ user, page, initialPosts }) {
     posts,
   ]);
 
+  useEffect(() => {
+    document.documentElement.style.backgroundColor = dashHex;
+    return () => {
+      document.documentElement.style.backgroundColor = "";
+    };
+  }, [dashHex]);
+
   // ── Create post ──
   const handleCreatePost = useCallback(
     async (data) => {
@@ -144,10 +152,14 @@ export default function PageViewClient({ user, page, initialPosts }) {
 
   // ── Edit post ──
   async function handleEditPost(data) {
+    if (!editingPost) return;
+
     const postId = editingPost._id;
-    const prev = editingPost;
-    setPosts((p) =>
-      p.map((post) => (post._id === postId ? { ...post, ...data } : post)),
+    const previousPosts = posts;
+    const nextOrderIndex = data.order_index ?? editingPost.order_index ?? 1;
+
+    setPosts((currentPosts) =>
+      reorderItemsByIndex(currentPosts, postId, nextOrderIndex, data),
     );
     setEditingPost(null);
 
@@ -161,12 +173,17 @@ export default function PageViewClient({ user, page, initialPosts }) {
         });
         if (!res.ok) throw new Error("Failed to update post");
         const updated = await res.json();
-        setPosts((p) =>
-          p.map((post) => (post._id === postId ? updated : post)),
+        setPosts((currentPosts) =>
+          reorderItemsByIndex(
+            currentPosts,
+            postId,
+            updated.order_index ?? nextOrderIndex,
+            updated,
+          ),
         );
       },
       onRollback: () => {
-        setPosts((p) => p.map((post) => (post._id === postId ? prev : post)));
+        setPosts(previousPosts);
       },
     });
   }
@@ -246,6 +263,8 @@ export default function PageViewClient({ user, page, initialPosts }) {
         style={{
           backgroundColor: dashHex,
           paddingTop: "env(safe-area-inset-top, 0px)",
+          marginTop: "-4px",
+          paddingBottom: "4px",
         }}
       >
         <div className="flex items-center justify-between min-h-[52px] sm:min-h-[64px] px-4 sm:px-6">
@@ -405,6 +424,7 @@ export default function PageViewClient({ user, page, initialPosts }) {
         <EditPostModal
           post={editingPost}
           page={page}
+          itemCount={posts.length}
           onClose={() => setEditingPost(null)}
           onSave={handleEditPost}
         />

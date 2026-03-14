@@ -86,8 +86,8 @@ export default function DashHeader({
         paddingTop: "env(safe-area-inset-top, 0px)",
       }}
     >
-      <div className="w-full px-6 sm:px-8">
-        <div className="flex items-center justify-between gap-3 min-h-[70px] sm:min-h-[90px]">
+      <div className="w-full px-4 sm:px-8">
+        <div className="flex items-center justify-between gap-2 min-h-[73px] sm:min-h-[126px]">
           <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3 relative">
             <TitleEdit
               currentTitle={usernameTitle}
@@ -120,7 +120,7 @@ export default function DashHeader({
           </div>
 
           <nav
-            className="hidden sm:flex items-center gap-2 shrink-0"
+            className="flex items-center gap-2 shrink-0 translate-y-[1px] sm:translate-y-0"
             aria-label="Dashboard actions"
           >
             {isOwner ? (
@@ -128,94 +128,59 @@ export default function DashHeader({
                 <span className="text-white/70 text-xs hidden md:block truncate max-w-[160px]">
                   {email}
                 </span>
+                {isEditMode && (
+                  <div className="flex sm:hidden gap-2">
+                    <input
+                      type="color"
+                      className="h-8 w-8 cursor-pointer rounded-[3px] border border-white/50 bg-white/10 px-[2px] shadow"
+                      value={backHex}
+                      onChange={(e) => handleBackChange(e.target.value)}
+                      aria-label="Background colour"
+                    />
+                    <input
+                      type="color"
+                      className="h-8 w-8 cursor-pointer rounded-[3px] border border-white/50 bg-white/10 px-[2px] shadow"
+                      value={dashHex}
+                      onChange={(e) => handleDashChange(e.target.value)}
+                      aria-label="Header colour"
+                    />
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={onToggleEdit}
-                  className={`h-9  rounded-[3px] border text-sm font-medium  ${
+                  className={`rounded-[3px] border font-medium transition-all
+                    h-8 w-8 sm:h-9 sm:w-[67px] sm:text-sm ${
                     isEditMode
-                      ? "bg-white/20 text-white/90 border-white/30 hover:bg-white/25 hover:text-white w-[67px]"
-                      : "bg-white/10 text-white/80 border-white/20 hover:bg-white/15 hover:text-white  w-[67px]"
+                      ? "bg-white/20 text-white/90 border-white/30 hover:bg-white/25 hover:text-white"
+                      : "bg-white/10 text-white/80 border-white/20 hover:bg-white/15 hover:text-white"
                   }`}
                   aria-pressed={isEditMode}
                 >
                   <span className="inline-flex items-center gap-1.5">
                     {isEditMode ? <Eye size={14} /> : <Edit2 size={14} />}
-                    {isEditMode ? "View" : "Edit"}
+                    <span className="hidden sm:inline">{isEditMode ? "View" : "Edit"}</span>
                   </span>
                 </button>
                 <button
                   type="button"
                   onClick={() => signOut({ callbackUrl: "/login" })}
-                  className="h-9 w-9 grid place-items-center rounded-[3px] border border-white/20 bg-white/10 text-white/80 hover:bg-white/15 hover:text-white transition-all"
+                  className="h-8 w-8 sm:h-9 sm:w-9 grid place-items-center rounded-[3px] border border-white/20 bg-white/10 text-white/80 hover:bg-white/15 hover:text-white transition-all"
                   aria-label="Sign out"
                 >
-                  <LogOut size={16} />
+                  <LogOut size={15} />
                 </button>
               </>
             ) : (
               <Link
                 href="/login"
-                className="h-9 px-3 rounded-[3px] border border-white/20 bg-white/10 text-sm text-white/85 hover:bg-white/15 transition-all inline-flex items-center"
+                className="h-8 px-2.5 sm:h-9 sm:px-3 rounded-[3px] border border-white/20 bg-white/10 text-xs sm:text-sm text-white/85 hover:bg-white/15 transition-all inline-flex items-center"
               >
                 Login
               </Link>
             )}
           </nav>
         </div>
-
-        <nav
-          className="sm:hidden flex items-center justify-end gap-2 pb-2"
-          aria-label="Dashboard actions mobile"
-        >
-          {isOwner ? (
-            <>
-              {isEditMode && (
-                <>
-                  <input
-                    type="color"
-                    className="h-8 w-9 cursor-pointer rounded-[3px] border border-white/50 bg-white/10 px-[2px] shadow"
-                    value={backHex}
-                    onChange={(e) => handleBackChange(e.target.value)}
-                    aria-label="Background colour"
-                  />
-                  <input
-                    type="color"
-                    className="h-8 w-9 cursor-pointer rounded-[3px] border border-white/50 bg-white/10 px-[2px] shadow"
-                    value={dashHex}
-                    onChange={(e) => handleDashChange(e.target.value)}
-                    aria-label="Header colour"
-                  />
-                </>
-              )}
-              <button
-                type="button"
-                onClick={onToggleEdit}
-                className={`h-8 px-2.5 rounded-[3px] border text-xs font-medium transition-all ${
-                  isEditMode
-                    ? "bg-white text-neutral-900 border-white"
-                    : "bg-white/10 text-white/80 border-white/20 hover:bg-white/15 hover:text-white"
-                }`}
-              >
-                {isEditMode ? "View" : "Edit"}
-              </button>
-              <button
-                type="button"
-                onClick={() => signOut({ callbackUrl: "/login" })}
-                className="h-8 w-8 grid place-items-center rounded-[3px] border border-white/20 bg-white/10 text-white/80 hover:bg-white/15 hover:text-white transition-all"
-                aria-label="Sign out"
-              >
-                <LogOut size={15} />
-              </button>
-            </>
-          ) : (
-            <Link
-              href="/login"
-              className="h-8 px-2.5 rounded-[3px] border border-white/20 bg-white/10 text-xs text-white/85 hover:bg-white/15 transition-all inline-flex items-center"
-            >
-              Login
-            </Link>
-          )}
-        </nav>
       </div>
       <div className="w-full pb-[5px]" style={{ backgroundColor: dashHex }}>
         <div

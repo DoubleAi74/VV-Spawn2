@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
+import { reorderItemsByIndex } from "@/lib/ordering";
 import { useQueue } from "@/lib/useQueue";
 import { setDashboardSnapshot } from "@/lib/routeTransitionCache";
 import DashHeader from "@/components/dashboard/DashHeader";
@@ -69,9 +70,14 @@ export default function DashboardViewClient({ user, initialPages }) {
 
   // ── Edit page ──
   async function handleEditPage(data) {
+    if (!editingPage) return;
+
     const pageId = editingPage._id;
-    setPages((prev) =>
-      prev.map((p) => (p._id === pageId ? { ...p, ...data } : p)),
+    const previousPages = pages;
+    const nextOrderIndex = data.order_index ?? editingPage.order_index ?? 1;
+
+    setPages((currentPages) =>
+      reorderItemsByIndex(currentPages, pageId, nextOrderIndex, data),
     );
     setEditingPage(null);
 
@@ -85,12 +91,17 @@ export default function DashboardViewClient({ user, initialPages }) {
         });
         if (!res.ok) throw new Error("Failed to update page");
         const updated = await res.json();
-        setPages((prev) => prev.map((p) => (p._id === pageId ? updated : p)));
+        setPages((currentPages) =>
+          reorderItemsByIndex(
+            currentPages,
+            pageId,
+            updated.order_index ?? nextOrderIndex,
+            updated,
+          ),
+        );
       },
       onRollback: () => {
-        setPages((prev) =>
-          prev.map((p) => (p._id === pageId ? editingPage : p)),
-        );
+        setPages(previousPages);
       },
     });
   }
@@ -205,6 +216,13 @@ export default function DashboardViewClient({ user, initialPages }) {
     warmRoutes.forEach(prefetchRoute);
   }, [visiblePages, user?.usernameTag, prefetchRoute]);
 
+  useEffect(() => {
+    document.documentElement.style.backgroundColor = dashHex;
+    return () => {
+      document.documentElement.style.backgroundColor = "";
+    };
+  }, [dashHex]);
+
   return (
     <div
       className="min-h-[150vh] overscroll-none"
@@ -307,6 +325,7 @@ export default function DashboardViewClient({ user, initialPages }) {
       {editingPage && (
         <EditPageModal
           page={editingPage}
+          itemCount={pages.length}
           onClose={() => setEditingPage(null)}
           onSave={handleEditPage}
         />

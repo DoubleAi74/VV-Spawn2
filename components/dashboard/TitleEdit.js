@@ -86,7 +86,7 @@ export default function TitleEdit({
         >
           {currentTitle}
         </h1>
-        <span className="h-7 w-7 sm:h-9 sm:w-9 mt-[2px] grid place-items-center rounded-[2px] border border-white/40 bg-black/20 backdrop-blur-sm transition-colors duration-150 group-hover:bg-black/30">
+        <span className="h-7 w-7 sm:h-9 sm:w-9 mt-[2px] hidden sm:grid place-items-center rounded-[2px] border border-white/40 bg-black/20 backdrop-blur-sm transition-colors duration-150 group-hover:bg-black/30">
           <Pencil size={18} className="text-gray-200" />
         </span>
       </button>

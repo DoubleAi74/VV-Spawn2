@@ -12,6 +12,7 @@ import {
 import RichTextEditorFallback, {
   RICH_TEXT_EDITOR_FRAME_HEIGHT_CLASS,
 } from '@/components/page/RichTextEditorFallback';
+import { clampOrderIndex } from '@/lib/ordering';
 import { processImageForUpload } from '@/lib/processImage';
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024;
@@ -44,11 +45,12 @@ function getFilenameFromUrl(url) {
   }
 }
 
-export default function EditPostModal({ post, page, onClose, onSave }) {
+export default function EditPostModal({ post, page, itemCount, onClose, onSave }) {
   const [title, setTitle] = useState(post.title || '');
   const [description, setDescription] = useState(post.description || '');
   const [contentType, setContentType] = useState(post.content_type || 'photo');
   const [url, setUrl] = useState(post.content || '');
+  const [orderIndex, setOrderIndex] = useState(post.order_index || 1);
   const [photoFile, setPhotoFile] = useState(null);
   const [contentFile, setContentFile] = useState(null);
   const [thumbnailFile, setThumbnailFile] = useState(null);
@@ -76,6 +78,7 @@ export default function EditPostModal({ post, page, onClose, onSave }) {
     setDescription(post.description || '');
     setContentType(post.content_type || 'photo');
     setUrl(post.content || '');
+    setOrderIndex(post.order_index || 1);
     setPhotoFile(null);
     setContentFile(null);
     setThumbnailFile(null);
@@ -221,6 +224,10 @@ export default function EditPostModal({ post, page, onClose, onSave }) {
         title: title.trim(),
         description,
         content_type: contentType,
+        order_index:
+          orderIndex === ''
+            ? post.order_index || 1
+            : clampOrderIndex(orderIndex, itemCount || 1),
       };
       const existingThumbnailForType = getPreviewForType(post, contentType);
 
@@ -308,6 +315,7 @@ export default function EditPostModal({ post, page, onClose, onSave }) {
   const requiresNewContentFile = contentType !== post.content_type && contentType === 'file';
   const existingFileName = post.content_type === 'file' ? getFilenameFromUrl(post.content) : '';
   const hasExistingThumbnailForType = Boolean(getPreviewForType(post, contentType));
+  const maxOrderIndex = Math.max(1, itemCount || 1);
   const hasRequiredThumbnail =
     contentType === 'photo'
       ? Boolean(photoFile) || hasExistingThumbnailForType
@@ -503,6 +511,25 @@ export default function EditPostModal({ post, page, onClose, onSave }) {
                     </div>
                   )}
                 </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <div className="w-32">
+                <label className="block text-sm text-end font-medium text-white/60 mt-[10px] mb-[7px]">
+                  Order Index
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max={maxOrderIndex}
+                  value={orderIndex}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setOrderIndex(value === '' ? '' : parseInt(value, 10));
+                  }}
+                  className="w-full px-4 py-2.5 rounded-[3px] bg-white/5 border border-white/10 text-white/90 placeholder-white/30 focus:outline-none focus:border-white/20 focus:bg-white/[0.06] transition-colors duration-150 focus:ring-1 focus:ring-white/10"
+                />
               </div>
             </div>
 

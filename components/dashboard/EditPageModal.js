@@ -2,12 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { X, Upload, Image as ImageIcon } from 'lucide-react';
+import { clampOrderIndex } from '@/lib/ordering';
 import { processImageForUpload } from '@/lib/processImage';
 
-export default function EditPageModal({ page, onClose, onSave }) {
+export default function EditPageModal({ page, itemCount, onClose, onSave }) {
   const [title, setTitle] = useState(page.title || '');
   const [subtitle, setSubtitle] = useState(page.description || '');
   const [slug, setSlug] = useState(page.slug || '');
+  const [orderIndex, setOrderIndex] = useState(page.order_index || 1);
   const [isPrivate, setIsPrivate] = useState(page.isPrivate || false);
   const [thumbnailFile, setThumbnailFile] = useState(null);
   const [thumbnailPreview, setThumbnailPreview] = useState(page.thumbnail || '');
@@ -29,6 +31,7 @@ export default function EditPageModal({ page, onClose, onSave }) {
     setTitle(page.title || '');
     setSubtitle(page.description || '');
     setSlug(page.slug || '');
+    setOrderIndex(page.order_index || 1);
     setIsPrivate(page.isPrivate || false);
     setThumbnailFile(null);
     setThumbnailPreview(page.thumbnail || '');
@@ -103,6 +106,10 @@ export default function EditPageModal({ page, onClose, onSave }) {
         title: title.trim(),
         description: subtitle.trim(),
         slug: slug.trim(),
+        order_index:
+          orderIndex === ''
+            ? page.order_index || 1
+            : clampOrderIndex(orderIndex, itemCount || 1),
         isPrivate,
         thumbnail,
         blurDataURL,
@@ -115,6 +122,7 @@ export default function EditPageModal({ page, onClose, onSave }) {
     }
   }
 
+  const maxOrderIndex = Math.max(1, itemCount || 1);
   const canSubmit = Boolean(title.trim()) && !loading;
 
   return (
@@ -181,33 +189,54 @@ export default function EditPageModal({ page, onClose, onSave }) {
             />
           </div>
 
-          <div className="flex items-center gap-3 py-0 p-1 rounded-[3px]">
-            <label className="flex items-center gap-3 cursor-pointer select-none">
-              <div className="relative inline-flex items-center">
-                <input
-                  type="checkbox"
-                  id="isPrivateEditCheckbox"
-                  checked={isPrivate}
-                  onChange={(e) => setIsPrivate(e.target.checked)}
-                  className="peer h-5 w-5 appearance-none rounded-[2px] border border-white/20 bg-white/[0.04] checked:bg-slate-700/80 checked:border-slate-500/90 transition-colors duration-150 cursor-pointer"
-                />
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={2.5}
-                  stroke="white"
-                  className="pointer-events-none absolute inset-0 m-auto hidden h-3 w-3 peer-checked:block"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                </svg>
+          <div className="flex flex-row justify-between pl-1 pr-2 gap-4">
+            <div className="flex-1 ml-0 pt-6">
+              <div className="flex items-center gap-3 py-0 p-1 rounded-[3px]">
+                <label className="flex items-center gap-3 cursor-pointer select-none">
+                  <div className="relative inline-flex items-center">
+                    <input
+                      type="checkbox"
+                      id="isPrivateEditCheckbox"
+                      checked={isPrivate}
+                      onChange={(e) => setIsPrivate(e.target.checked)}
+                      className="peer h-5 w-5 appearance-none rounded-[2px] border border-white/20 bg-white/[0.04] checked:bg-slate-700/80 checked:border-slate-500/90 transition-colors duration-150 cursor-pointer"
+                    />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      strokeWidth={2.5}
+                      stroke="white"
+                      className="pointer-events-none absolute inset-0 m-auto hidden h-3 w-3 peer-checked:block"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                    </svg>
+                  </div>
+                  <span className="text-sm text-white/70 leading-tight">
+                    Private page
+                    <br />
+                    <span className="text-xs text-white/40">(visible only to you)</span>
+                  </span>
+                </label>
               </div>
-              <span className="text-sm text-white/70 leading-tight">
-                Private page
-                <br />
-                <span className="text-xs text-white/40">(visible only to you)</span>
-              </span>
-            </label>
+            </div>
+
+            <div className="w-1/3 max-w-[90px]">
+              <label className="block text-sm text-end font-medium text-white/60 mb-2">
+                Order Index
+              </label>
+              <input
+                type="number"
+                min="1"
+                max={maxOrderIndex}
+                value={orderIndex}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setOrderIndex(value === '' ? '' : parseInt(value, 10));
+                }}
+                className="w-full px-4 py-2.5 rounded-[3px] bg-white/5 border border-white/10 text-white/90 placeholder-white/30 focus:outline-none focus:border-white/20 focus:bg-white/[0.06] transition-colors duration-150 focus:ring-1 focus:ring-white/10"
+              />
+            </div>
           </div>
 
           <div>

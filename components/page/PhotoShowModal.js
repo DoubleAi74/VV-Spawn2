@@ -371,7 +371,7 @@ export default function PhotoShowModal({
             </div>
 
             <div className="bg-neutral-900 border-t border-neutral-800 py-4 overflow-x-hidden">
-              <div className="w-full px-[87px]">
+              <div className="w-full px-5 sm:px-8 md:px-[87px]">
                 {renderedDescription.hasContent ? (
                   <article
                     ref={descriptionRef}
