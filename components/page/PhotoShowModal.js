@@ -238,9 +238,6 @@ export default function PhotoShowModal({
   return (
     <div
       className="fixed inset-0 z-[220] bg-black/35 backdrop-blur-[1px] flex items-center justify-center p-2 sm:p-4"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
       aria-label="Image lightbox"
     >
       <div
