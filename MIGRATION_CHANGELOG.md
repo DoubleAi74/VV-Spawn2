@@ -1081,3 +1081,21 @@ Changes:
 - Added scroll-preserving `router.refresh()` behavior after mutation queues drain, aligning the mounted client view with fresh server data without a visible jump.
 - Tightened optimistic card UX by making saving cards explicitly non-interactive and showing a lightweight `Saving...` state in the page/dashboard headers.
 - Hardened create/delete ordering on the server by keeping `order_index` sequences contiguous after deletions and by assigning new items after the current maximum order index, preventing duplicate positions from old gaps or concurrent writes.
+
+## 49) Cross-Window Theme Colour Sync (2026-03-15)
+
+User request:
+- Make dashboard/page colour changes propagate more reliably to other places where the site is already open.
+
+Files updated:
+- `context/ThemeContext.js`
+- `lib/revalidation.js`
+- `app/api/user/colours/route.js`
+- `app/api/theme/[usernameTag]/route.js`
+
+Changes:
+- Added `storage` event handling in `ThemeContext` so same-browser tabs/windows update immediately when the theme changes.
+- Added prop-to-state theme reconciliation so refreshed server route props can now update the mounted client theme state instead of only applying on first mount.
+- Added a lightweight public theme read endpoint and visible-tab background sync, so separate browsers pick up colour changes without requiring a manual page refresh.
+- Added a short local hold window so background theme polling does not override a just-picked optimistic colour before the debounced save reaches the server.
+- Extended route revalidation on colour save to invalidate the user dashboard and all of that user’s page routes, keeping later navigations aligned with the latest theme.
