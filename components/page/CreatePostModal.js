@@ -9,11 +9,12 @@ import {
   File as FileIcon,
   Image as ImageIcon,
   Images,
+  CheckCircle,
 } from "lucide-react";
 import RichTextEditorFallback, {
   RICH_TEXT_EDITOR_FRAME_HEIGHT_CLASS,
 } from "@/components/page/RichTextEditorFallback";
-import { processImageForUpload } from "@/lib/processImage";
+import { processImageForUpload, fetchServerBlur } from "@/lib/processImage";
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 
@@ -145,14 +146,15 @@ export default function CreatePostModal({
   }
 
   async function uploadPhoto(nextFile) {
-    const { file: compressed, blurDataURL } =
+    const { file: compressed, blurDataURL: clientBlur, needsServerBlur } =
       await processImageForUpload(nextFile);
+    const contentType = compressed.type || "image/jpeg";
     const presignRes = await fetch("/api/storage/upload", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         filename: compressed.name,
-        contentType: "image/jpeg",
+        contentType,
         folder: `users/pages/${page._id}/posts`,
         fileSize: compressed.size,
       }),
@@ -163,8 +165,9 @@ export default function CreatePostModal({
     await fetch(signedUrl, {
       method: "PUT",
       body: compressed,
-      headers: { "Content-Type": "image/jpeg" },
+      headers: { "Content-Type": contentType },
     });
+    const blurDataURL = needsServerBlur ? await fetchServerBlur(publicUrl) : clientBlur;
     return { content: publicUrl, thumbnail: publicUrl, blurDataURL };
   }
 
@@ -191,14 +194,15 @@ export default function CreatePostModal({
   }
 
   async function uploadThumbnail(nextFile) {
-    const { file: compressed, blurDataURL } =
+    const { file: compressed, blurDataURL: clientBlur, needsServerBlur } =
       await processImageForUpload(nextFile);
+    const contentType = compressed.type || "image/jpeg";
     const presignRes = await fetch("/api/storage/upload", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         filename: compressed.name,
-        contentType: "image/jpeg",
+        contentType,
         folder: `users/pages/${page._id}/posts`,
         fileSize: compressed.size,
       }),
@@ -209,8 +213,9 @@ export default function CreatePostModal({
     await fetch(signedUrl, {
       method: "PUT",
       body: compressed,
-      headers: { "Content-Type": "image/jpeg" },
+      headers: { "Content-Type": contentType },
     });
+    const blurDataURL = needsServerBlur ? await fetchServerBlur(publicUrl) : clientBlur;
     return { thumbnail: publicUrl, blurDataURL };
   }
 
@@ -300,6 +305,8 @@ export default function CreatePostModal({
       (activeTab === "url" && Boolean(url.trim()) && Boolean(thumbnailFile)) ||
       (activeTab === "file" && Boolean(file) && Boolean(thumbnailFile)));
   const previewSrc = activeTab === "photo" ? filePreview : thumbnailPreview;
+  const previewFile = activeTab === "photo" ? file : thumbnailFile;
+  const isHeicPreview = Boolean(previewFile && (/\.(heic|heif)$/i.test(previewFile.name) || previewFile.type === "image/heic" || previewFile.type === "image/heif"));
   const isUploadReady =
     activeTab === "photo" ? Boolean(file) : Boolean(thumbnailFile);
   const selectedFileName =
@@ -400,12 +407,18 @@ export default function CreatePostModal({
               <div className="flex items-center gap-4">
                 {previewSrc ? (
                   <div className="w-16 h-16 rounded-[1px] overflow-hidden border-2 border-emerald-500/40 flex-shrink-0 relative">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={previewSrc}
-                      alt="Thumbnail Preview"
-                      className="w-full h-full object-cover"
-                    />
+                    {isHeicPreview ? (
+                      <div className="w-full h-full flex items-center justify-center bg-emerald-500/10">
+                        <CheckCircle className="w-6 h-6 text-emerald-400/80" />
+                      </div>
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={previewSrc}
+                        alt="Thumbnail Preview"
+                        className="w-full h-full object-cover"
+                      />
+                    )}
                   </div>
                 ) : (
                   <div

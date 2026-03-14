@@ -105,7 +105,7 @@ export default function DashboardLoading() {
         }}
       >
         <div className="w-full px-0">
-          <div className="flex items-center min-h-[70px] sm:min-h-[90px] px-6 sm:px-8">
+          <div className="flex items-center min-h-[73px] sm:min-h-[85px] px-4 sm:px-8">
             {snapshot?.usernameTitle ? (
               <h1
                 className="text-2xl sm:text-4xl font-extrabold tracking-tight truncate"

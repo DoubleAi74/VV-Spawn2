@@ -8,12 +8,13 @@ import {
   Image as ImageIcon,
   Link as LinkIcon,
   File as FileIcon,
+  CheckCircle,
 } from 'lucide-react';
 import RichTextEditorFallback, {
   RICH_TEXT_EDITOR_FRAME_HEIGHT_CLASS,
 } from '@/components/page/RichTextEditorFallback';
 import { clampOrderIndex } from '@/lib/ordering';
-import { processImageForUpload } from '@/lib/processImage';
+import { processImageForUpload, fetchServerBlur } from '@/lib/processImage';
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024;
 
@@ -150,13 +151,14 @@ export default function EditPostModal({ post, page, itemCount, onClose, onSave }
   }
 
   async function uploadPhoto(nextFile) {
-    const { file: compressed, blurDataURL } = await processImageForUpload(nextFile);
+    const { file: compressed, blurDataURL: clientBlur, needsServerBlur } = await processImageForUpload(nextFile);
+    const contentType = compressed.type || 'image/jpeg';
     const presignRes = await fetch('/api/storage/upload', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         filename: compressed.name,
-        contentType: 'image/jpeg',
+        contentType,
         folder: `users/pages/${page._id}/posts`,
         fileSize: compressed.size,
       }),
@@ -166,8 +168,9 @@ export default function EditPostModal({ post, page, itemCount, onClose, onSave }
     await fetch(signedUrl, {
       method: 'PUT',
       body: compressed,
-      headers: { 'Content-Type': 'image/jpeg' },
+      headers: { 'Content-Type': contentType },
     });
+    const blurDataURL = needsServerBlur ? await fetchServerBlur(publicUrl) : clientBlur;
     return { content: publicUrl, thumbnail: publicUrl, blurDataURL };
   }
 
@@ -193,13 +196,14 @@ export default function EditPostModal({ post, page, itemCount, onClose, onSave }
   }
 
   async function uploadThumbnail(nextFile) {
-    const { file: compressed, blurDataURL } = await processImageForUpload(nextFile);
+    const { file: compressed, blurDataURL: clientBlur, needsServerBlur } = await processImageForUpload(nextFile);
+    const contentType = compressed.type || 'image/jpeg';
     const presignRes = await fetch('/api/storage/upload', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         filename: compressed.name,
-        contentType: 'image/jpeg',
+        contentType,
         folder: `users/pages/${page._id}/posts`,
         fileSize: compressed.size,
       }),
@@ -209,8 +213,9 @@ export default function EditPostModal({ post, page, itemCount, onClose, onSave }
     await fetch(signedUrl, {
       method: 'PUT',
       body: compressed,
-      headers: { 'Content-Type': 'image/jpeg' },
+      headers: { 'Content-Type': contentType },
     });
+    const blurDataURL = needsServerBlur ? await fetchServerBlur(publicUrl) : clientBlur;
     return { thumbnail: publicUrl, blurDataURL };
   }
 
@@ -328,6 +333,8 @@ export default function EditPostModal({ post, page, itemCount, onClose, onSave }
     (!requiresNewContentFile || Boolean(contentFile)) &&
     hasRequiredThumbnail;
   const hasImagePreview = Boolean(filePreview);
+  const previewFile = contentType === 'photo' ? photoFile : thumbnailFile;
+  const isHeicPreview = Boolean(previewFile && (/\.(heic|heif)$/i.test(previewFile.name) || previewFile.type === 'image/heic' || previewFile.type === 'image/heif'));
   const isImageSelected = contentType === 'photo' ? Boolean(photoFile) : Boolean(thumbnailFile);
   const selectedFileName =
     contentType === 'photo'
@@ -434,12 +441,18 @@ export default function EditPostModal({ post, page, itemCount, onClose, onSave }
               <div className="flex items-center gap-4">
                 {hasImagePreview ? (
                   <div className="w-16 h-16 rounded-[1px] overflow-hidden border-2 border-emerald-500/40 flex-shrink-0">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={filePreview}
-                      alt="Thumbnail Preview"
-                      className="w-full h-full object-cover"
-                    />
+                    {isHeicPreview ? (
+                      <div className="w-full h-full flex items-center justify-center bg-emerald-500/10">
+                        <CheckCircle className="w-6 h-6 text-emerald-400/80" />
+                      </div>
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={filePreview}
+                        alt="Thumbnail Preview"
+                        className="w-full h-full object-cover"
+                      />
+                    )}
                   </div>
                 ) : (
                   <div

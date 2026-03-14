@@ -1,6 +1,7 @@
 import { auth } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
 import { updatePost, deletePost } from '@/lib/data';
+import { revalidateDashboardAndPage } from '@/lib/revalidation';
 import Post from '@/lib/models/Post';
 import Page from '@/lib/models/Page';
 import sanitizeHtml from 'sanitize-html';
@@ -18,7 +19,7 @@ async function getOwnedPost(userId, postId) {
   if (!post) return null;
   const page = await Page.findById(post.pageId).lean();
   if (!page || page.userId.toString() !== userId) return null;
-  return post;
+  return { post, page };
 }
 
 export async function PATCH(request, { params }) {
@@ -26,10 +27,11 @@ export async function PATCH(request, { params }) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
 
   const { postId } = await params;
-  const existingPost = await getOwnedPost(session.user.userId, postId);
-  if (!existingPost) {
+  const ownedPost = await getOwnedPost(session.user.userId, postId);
+  if (!ownedPost) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
+  const existingPost = ownedPost.post;
 
   const data = await request.json();
   if (data.description) {
@@ -57,10 +59,12 @@ export async function DELETE(request, { params }) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
 
   const { postId } = await params;
-  if (!(await getOwnedPost(session.user.userId, postId))) {
+  const ownedPost = await getOwnedPost(session.user.userId, postId);
+  if (!ownedPost) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   await deletePost(postId);
+  revalidateDashboardAndPage(ownedPost.page.usernameTag, ownedPost.page.slug);
   return NextResponse.json({ success: true });
 }

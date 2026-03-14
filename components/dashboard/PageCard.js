@@ -37,6 +37,7 @@ export default function PageCard({
     >
       <button
         type="button"
+        disabled={isOptimistic}
         onClick={handleOpenPage}
         onMouseEnter={handlePrefetch}
         onFocus={handlePrefetch}

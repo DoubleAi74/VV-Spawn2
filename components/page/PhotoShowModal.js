@@ -11,6 +11,20 @@ import {
 } from "lucide-react";
 import { buildRenderableRichText } from "@/lib/richText";
 
+const R2_DOMAIN = process.env.NEXT_PUBLIC_R2_DOMAIN;
+
+// Mirrors cloudflareLoader exactly — same URL means browser cache hits when
+// navigating from a post card into the modal.
+function getDisplayUrl(src) {
+  if (!src) return src;
+  try {
+    const path = new URL(src).pathname;
+    return `${R2_DOMAIN}/cdn-cgi/image/quality=75,format=webp${path}`;
+  } catch {
+    return src;
+  }
+}
+
 export default function PhotoShowModal({
   post,
   posts = [],
@@ -294,7 +308,7 @@ export default function PhotoShowModal({
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto overscroll-none">
+          <div className="flex-1 overflow-y-auto overscroll-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             <div className="relative bg-black select-none flex justify-center items-center overflow-hidden h-[65vh] w-full">
               {post.blurDataURL && (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -309,7 +323,7 @@ export default function PhotoShowModal({
               {thumbUrl && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={thumbUrl}
+                  src={getDisplayUrl(thumbUrl)}
                   alt=""
                   aria-hidden
                   onLoad={() => setThumbnailLoaded(true)}
@@ -322,7 +336,7 @@ export default function PhotoShowModal({
               {displayImageUrl && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={displayImageUrl}
+                  src={getDisplayUrl(displayImageUrl)}
                   alt={post.title || ""}
                   onLoad={() => setIsLoaded(true)}
                   className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-300 ease-out ${
@@ -378,7 +392,7 @@ export default function PhotoShowModal({
                       prose prose-sm sm:prose-base prose-invert max-w-none
                       text-left whitespace-normal break-normal [text-wrap:pretty]
                       [word-break:normal] [overflow-wrap:normal] [hyphens:manual]
-                      prose-p:my-2 prose-p:leading-7 prose-p:text-neutral-300 first:[&_p]:mt-[-8px]
+                      prose-p:my-2 prose-p:leading-7 prose-p:text-neutral-300 first:[&_p]:mt-[-3px]
                       prose-headings:mb-3 prose-headings:mt-0 prose-headings:font-medium prose-headings:text-neutral-100
                       prose-h1:text-xl prose-h2:text-lg prose-h3:text-base
                       prose-strong:font-semibold prose-strong:text-neutral-100

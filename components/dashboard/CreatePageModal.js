@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { X, Upload, Image as ImageIcon } from 'lucide-react';
-import { processImageForUpload } from '@/lib/processImage';
+import { processImageForUpload, fetchServerBlur } from '@/lib/processImage';
 
 export default function CreatePageModal({ onClose, onCreate }) {
   const [title, setTitle] = useState('');
@@ -56,13 +56,14 @@ export default function CreatePageModal({ onClose, onCreate }) {
     setLoading(true);
 
     try {
-      const { file: compressed, blurDataURL } = await processImageForUpload(thumbnailFile);
+      const { file: compressed, blurDataURL: clientBlur, needsServerBlur } = await processImageForUpload(thumbnailFile);
+      const contentType = compressed.type || 'image/jpeg';
       const presignRes = await fetch('/api/storage/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           filename: compressed.name,
-          contentType: 'image/jpeg',
+          contentType,
           folder: 'pages/thumbnails',
           fileSize: compressed.size,
         }),
@@ -73,9 +74,10 @@ export default function CreatePageModal({ onClose, onCreate }) {
       await fetch(signedUrl, {
         method: 'PUT',
         body: compressed,
-        headers: { 'Content-Type': 'image/jpeg' },
+        headers: { 'Content-Type': contentType },
       });
 
+      const blurDataURL = needsServerBlur ? await fetchServerBlur(publicUrl) : clientBlur;
       await onCreate({
         title: title.trim(),
         description: subtitle.trim(),

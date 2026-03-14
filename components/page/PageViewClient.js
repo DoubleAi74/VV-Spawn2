@@ -6,6 +6,7 @@ import { Plus, Edit2, Eye, LogOut, ArrowLeft } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
+import { mergeServerAndOptimistic } from "@/lib/optimisticMerge";
 import { reorderItemsByIndex } from "@/lib/ordering";
 import { useQueue } from "@/lib/useQueue";
 import { setPageSnapshot } from "@/lib/routeTransitionCache";
@@ -25,7 +26,19 @@ export default function PageViewClient({ user, page, initialPosts }) {
   const { user: sessionUser } = useAuth();
   const { dashHex, backHex } = useTheme();
   const router = useRouter();
-  const { enqueue } = useQueue();
+  const scrollRestorePosRef = useRef(null);
+  const refreshWithScrollRestore = useCallback(() => {
+    if (typeof window === "undefined") return;
+    scrollRestorePosRef.current = window.scrollY;
+    if ("scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
+    router.refresh();
+  }, [router]);
+  const handleQueueIdle = useCallback(async () => {
+    refreshWithScrollRestore();
+  }, [refreshWithScrollRestore]);
+  const { enqueue, isSyncing } = useQueue(handleQueueIdle);
 
   const isOwner = sessionUser?.usernameTag === user.usernameTag;
   const [isEditMode, setIsEditMode] = useState(false);
@@ -64,6 +77,26 @@ export default function PageViewClient({ user, page, initialPosts }) {
   }, [page._id, page.pageMetaData?.infoText2]);
 
   useEffect(() => {
+    setPosts((currentPosts) =>
+      mergeServerAndOptimistic(initialPosts, currentPosts),
+    );
+
+    if (scrollRestorePosRef.current === null) return;
+
+    const savedY = scrollRestorePosRef.current;
+    scrollRestorePosRef.current = null;
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: savedY, behavior: "instant" });
+        if ("scrollRestoration" in window.history) {
+          window.history.scrollRestoration = "auto";
+        }
+      });
+    });
+  }, [initialPosts]);
+
+  useEffect(() => {
     if (!user?.usernameTag || !page?.slug) return;
 
     setPageSnapshot(user.usernameTag, page.slug, {
@@ -93,6 +126,9 @@ export default function PageViewClient({ user, page, initialPosts }) {
     document.documentElement.style.backgroundColor = dashHex;
     return () => {
       document.documentElement.style.backgroundColor = "";
+      if ("scrollRestoration" in window.history) {
+        window.history.scrollRestoration = "auto";
+      }
     };
   }, [dashHex]);
 
@@ -294,6 +330,11 @@ export default function PageViewClient({ user, page, initialPosts }) {
           >
             {isOwner && (
               <>
+                {isSyncing && (
+                  <span className="text-white/60 text-xs hidden sm:block">
+                    Saving...
+                  </span>
+                )}
                 <span className="text-white/65 text-xs hidden md:block truncate max-w-[160px]">
                   {user.email}
                 </span>
@@ -324,7 +365,7 @@ export default function PageViewClient({ user, page, initialPosts }) {
             )}
           </nav>
         </div>
-        <div className="w-full pb-[5px]" style={{ backgroundColor: dashHex }}>
+        <div className="w-full pb-[2px]" style={{ backgroundColor: dashHex }}>
           <div
             className="h-[8px] w-full border-t border-black/15"
             style={{ backgroundColor: lighten(dashHex, 30) }}
@@ -333,7 +374,7 @@ export default function PageViewClient({ user, page, initialPosts }) {
       </header>
 
       <main
-        className="w-full flex-1 px-2 sm:px-4 md:px-5 pt-[1.8rem]"
+        className="w-full flex-1 px-2 sm:px-4 md:px-5 pt-[33px]"
         style={{
           backgroundColor: hexToRgba(backHex, 1),
           paddingBottom: reserveHiddenInfoSpace

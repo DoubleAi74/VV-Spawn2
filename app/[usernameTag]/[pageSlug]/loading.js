@@ -120,7 +120,7 @@ export default function PageViewLoading() {
             )}
           </div>
         </div>
-        <div className="w-full pb-[5px]" style={{ backgroundColor: dashHex }}>
+        <div className="w-full pb-[6px]" style={{ backgroundColor: dashHex }}>
           <div
             className="h-[8px] w-full border-t border-black/15"
             style={{ backgroundColor: lighten(dashHex, 30) }}

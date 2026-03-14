@@ -1,13 +1,14 @@
 import { auth } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
-import { updatePage, deletePage, getPageBySlug } from '@/lib/data';
+import { updatePage, deletePage } from '@/lib/data';
+import { revalidateDashboardAndPage } from '@/lib/revalidation';
 import Page from '@/lib/models/Page';
 import { NextResponse } from 'next/server';
 
 async function ownsPage(userId, pageId) {
   await connectDB();
   const page = await Page.findById(pageId).lean();
-  return page && page.userId.toString() === userId;
+  return page && page.userId.toString() === userId ? page : null;
 }
 
 export async function PATCH(request, { params }) {
@@ -29,10 +30,12 @@ export async function DELETE(request, { params }) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
 
   const { pageId } = await params;
-  if (!(await ownsPage(session.user.userId, pageId))) {
+  const page = await ownsPage(session.user.userId, pageId);
+  if (!page) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   await deletePage(pageId);
+  revalidateDashboardAndPage(page.usernameTag, page.slug);
   return NextResponse.json({ success: true });
 }

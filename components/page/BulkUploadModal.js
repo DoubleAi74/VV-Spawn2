@@ -8,8 +8,9 @@ import {
   Image as ImageIcon,
   Trash2,
   Loader2,
+  CheckCircle,
 } from "lucide-react";
-import { processImageForUpload } from "@/lib/processImage";
+import { processImageForUpload, fetchServerBlur } from "@/lib/processImage";
 
 function makeUploadItem(file) {
   return {
@@ -117,10 +118,10 @@ export default function BulkUploadModal({
       for (const item of batch) {
         setProgress((prev) => ({ ...prev, [item.id]: "uploading" }));
         try {
-          const { file: compressed, blurDataURL } = await processImageForUpload(
+          const { file: compressed, blurDataURL, needsServerBlur } = await processImageForUpload(
             item.file,
           );
-          processed.push({ item, compressed, blurDataURL });
+          processed.push({ item, compressed, blurDataURL, needsServerBlur });
         } catch {
           setProgress((prev) => ({ ...prev, [item.id]: "error" }));
         }
@@ -139,7 +140,7 @@ export default function BulkUploadModal({
           files: processed.map(({ item, compressed }) => ({
             clientId: item.id,
             filename: compressed.name,
-            contentType: "image/jpeg",
+            contentType: compressed.type || "image/jpeg",
             folder: `users/pages/${page._id}/posts`,
           })),
         }),
@@ -157,18 +158,20 @@ export default function BulkUploadModal({
       );
       const uploaded = [];
 
-      for (const { item, compressed, blurDataURL } of processed) {
+      for (const { item, compressed, blurDataURL: clientBlur, needsServerBlur } of processed) {
         const urlInfo = urlMap[item.id];
         if (!urlInfo) {
           setProgress((prev) => ({ ...prev, [item.id]: "error" }));
           continue;
         }
         try {
+          const contentType = compressed.type || "image/jpeg";
           await fetch(urlInfo.signedUrl, {
             method: "PUT",
             body: compressed,
-            headers: { "Content-Type": "image/jpeg" },
+            headers: { "Content-Type": contentType },
           });
+          const blurDataURL = needsServerBlur ? await fetchServerBlur(urlInfo.publicUrl) : clientBlur;
           setProgress((prev) => ({ ...prev, [item.id]: "done" }));
           uploaded.push({
             content: urlInfo.publicUrl,
@@ -293,12 +296,18 @@ export default function BulkUploadModal({
                       key={item.id}
                       className="relative group aspect-square rounded-[2px] overflow-hidden border border-white/10 bg-white/[0.03]"
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={item.preview}
-                        alt={item.file.name}
-                        className="w-full h-full object-cover"
-                      />
+                      {/\.(heic|heif)$/i.test(item.file.name) || item.file.type === "image/heic" || item.file.type === "image/heif" ? (
+                        <div className="w-full h-full flex items-center justify-center bg-emerald-500/10">
+                          <CheckCircle className="w-6 h-6 text-emerald-400/80" />
+                        </div>
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={item.preview}
+                          alt={item.file.name}
+                          className="w-full h-full object-cover"
+                        />
+                      )}
 
                       <button
                         type="button"

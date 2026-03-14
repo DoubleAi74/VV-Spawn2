@@ -44,6 +44,7 @@ export default function DashHeader({
   email,
   isOwner,
   isEditMode,
+  statusText,
   onToggleEdit,
   onTitleSave,
 }) {
@@ -87,7 +88,7 @@ export default function DashHeader({
       }}
     >
       <div className="w-full px-4 sm:px-8">
-        <div className="flex items-center justify-between gap-2 min-h-[73px] sm:min-h-[126px]">
+        <div className="flex items-center justify-between gap-2 min-h-[73px] sm:min-h-[85px]">
           <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3 relative">
             <TitleEdit
               currentTitle={usernameTitle}
@@ -125,6 +126,11 @@ export default function DashHeader({
           >
             {isOwner ? (
               <>
+                {statusText ? (
+                  <span className="text-white/60 text-xs hidden sm:block">
+                    {statusText}
+                  </span>
+                ) : null}
                 <span className="text-white/70 text-xs hidden md:block truncate max-w-[160px]">
                   {email}
                 </span>
@@ -151,15 +157,17 @@ export default function DashHeader({
                   onClick={onToggleEdit}
                   className={`rounded-[3px] border font-medium transition-all
                     h-8 w-8 sm:h-9 sm:w-[67px] sm:text-sm ${
-                    isEditMode
-                      ? "bg-white/20 text-white/90 border-white/30 hover:bg-white/25 hover:text-white"
-                      : "bg-white/10 text-white/80 border-white/20 hover:bg-white/15 hover:text-white"
-                  }`}
+                      isEditMode
+                        ? "bg-white/20 text-white/90 border-white/30 hover:bg-white/25 hover:text-white"
+                        : "bg-white/10 text-white/80 border-white/20 hover:bg-white/15 hover:text-white"
+                    }`}
                   aria-pressed={isEditMode}
                 >
                   <span className="inline-flex items-center gap-1.5">
                     {isEditMode ? <Eye size={14} /> : <Edit2 size={14} />}
-                    <span className="hidden sm:inline">{isEditMode ? "View" : "Edit"}</span>
+                    <span className="hidden sm:inline">
+                      {isEditMode ? "View" : "Edit"}
+                    </span>
                   </span>
                 </button>
                 <button

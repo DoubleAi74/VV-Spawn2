@@ -2,6 +2,7 @@ import { auth } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
 import { createPost } from '@/lib/data';
 import Page from '@/lib/models/Page';
+import { revalidateDashboardAndPage } from '@/lib/revalidation';
 import sanitizeHtml from 'sanitize-html';
 import { NextResponse } from 'next/server';
 
@@ -41,5 +42,6 @@ export async function POST(request) {
   }
 
   const post = await createPost(pageId, rest);
+  revalidateDashboardAndPage(page.usernameTag, page.slug);
   return NextResponse.json(JSON.parse(JSON.stringify(post)));
 }

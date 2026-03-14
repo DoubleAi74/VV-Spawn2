@@ -1053,3 +1053,31 @@ Changes:
 - Passed list counts into the modals so position edits are bounded to valid 1-based ranges.
 - Restored optimistic sibling shifting in the page/dashboard client views so saving a new index immediately reorders the grid.
 - Extended the data layer so page and post PATCH updates now persist `order_index` moves by shifting affected siblings on the server.
+
+## 48) Robust Post/Page Create And Delete Sync (2026-03-15)
+
+User request:
+- Implement the `imp.md` mutation-sync plan for robust post/page creation and deletion so new items do not appear to disappear after route changes.
+
+Files updated:
+- `lib/revalidation.js`
+- `lib/optimisticMerge.js`
+- `lib/useQueue.js`
+- `lib/data.js`
+- `app/api/posts/route.js`
+- `app/api/posts/[postId]/route.js`
+- `app/api/pages/route.js`
+- `app/api/pages/[pageId]/route.js`
+- `components/page/PageViewClient.js`
+- `components/dashboard/DashboardViewClient.js`
+- `components/dashboard/DashHeader.js`
+- `components/page/PostCard.js`
+- `components/dashboard/PageCard.js`
+
+Changes:
+- Added a shared route revalidation helper so post/page create and delete invalidate both the page route and the owning dashboard route.
+- Upgraded the optimistic queue to expose a queue-idle callback, allowing the page and dashboard to refresh only after pending mutations finish.
+- Added client-side reconciliation so refreshed `initialPosts` and `initialPages` merge back into local optimistic state instead of being treated as one-time seed data.
+- Added scroll-preserving `router.refresh()` behavior after mutation queues drain, aligning the mounted client view with fresh server data without a visible jump.
+- Tightened optimistic card UX by making saving cards explicitly non-interactive and showing a lightweight `Saving...` state in the page/dashboard headers.
+- Hardened create/delete ordering on the server by keeping `order_index` sequences contiguous after deletions and by assigning new items after the current maximum order index, preventing duplicate positions from old gaps or concurrent writes.

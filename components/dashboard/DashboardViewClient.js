@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
+import { mergeServerAndOptimistic } from "@/lib/optimisticMerge";
 import { reorderItemsByIndex } from "@/lib/ordering";
 import { useQueue } from "@/lib/useQueue";
 import { setDashboardSnapshot } from "@/lib/routeTransitionCache";
@@ -18,7 +19,19 @@ export default function DashboardViewClient({ user, initialPages }) {
   const { user: sessionUser } = useAuth();
   const { dashHex, backHex } = useTheme();
   const router = useRouter();
-  const { enqueue } = useQueue();
+  const scrollRestorePosRef = useRef(null);
+  const refreshWithScrollRestore = useCallback(() => {
+    if (typeof window === "undefined") return;
+    scrollRestorePosRef.current = window.scrollY;
+    if ("scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
+    router.refresh();
+  }, [router]);
+  const handleQueueIdle = useCallback(async () => {
+    refreshWithScrollRestore();
+  }, [refreshWithScrollRestore]);
+  const { enqueue, isSyncing } = useQueue(handleQueueIdle);
 
   const isOwner = sessionUser?.usernameTag === user.usernameTag;
   const [isEditMode, setIsEditMode] = useState(false);
@@ -26,6 +39,26 @@ export default function DashboardViewClient({ user, initialPages }) {
   const [showCreate, setShowCreate] = useState(false);
   const [editingPage, setEditingPage] = useState(null);
   const prefetchedRoutesRef = useRef(new Set());
+
+  useEffect(() => {
+    setPages((currentPages) =>
+      mergeServerAndOptimistic(initialPages, currentPages),
+    );
+
+    if (scrollRestorePosRef.current === null) return;
+
+    const savedY = scrollRestorePosRef.current;
+    scrollRestorePosRef.current = null;
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: savedY, behavior: "instant" });
+        if ("scrollRestoration" in window.history) {
+          window.history.scrollRestoration = "auto";
+        }
+      });
+    });
+  }, [initialPages]);
 
   // ── Info text ──
   async function handleSaveInfo(infoText) {
@@ -220,6 +253,9 @@ export default function DashboardViewClient({ user, initialPages }) {
     document.documentElement.style.backgroundColor = dashHex;
     return () => {
       document.documentElement.style.backgroundColor = "";
+      if ("scrollRestoration" in window.history) {
+        window.history.scrollRestoration = "auto";
+      }
     };
   }, [dashHex]);
 
@@ -238,6 +274,7 @@ export default function DashboardViewClient({ user, initialPages }) {
           email={user.email}
           isOwner={isOwner}
           isEditMode={isEditMode}
+          statusText={isSyncing ? "Saving..." : ""}
           onToggleEdit={() => setIsEditMode((m) => !m)}
           onTitleSave={(newTag) => router.replace(`/${newTag}`)}
         />
