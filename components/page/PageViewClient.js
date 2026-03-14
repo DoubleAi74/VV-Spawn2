@@ -263,6 +263,8 @@ export default function PageViewClient({ user, page, initialPosts }) {
         style={{
           backgroundColor: dashHex,
           paddingTop: "env(safe-area-inset-top, 0px)",
+          marginTop: "-4px",
+          paddingBottom: "4px",
         }}
       >
         <div className="flex items-center justify-between min-h-[52px] sm:min-h-[64px] px-4 sm:px-6">
