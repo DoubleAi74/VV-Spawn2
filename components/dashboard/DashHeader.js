@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { LogOut, Edit2, Eye } from "lucide-react";
 import { signOut } from "next-auth/react";
-import TitleEdit from "@/components/dashboard/TitleEdit";
+import TitleEdit, { TitleEditPanel } from "@/components/dashboard/TitleEdit";
 import { useTheme } from "@/context/ThemeContext";
 
 function normalizeHex(hex, fallback = "#000000") {
@@ -50,6 +50,7 @@ export default function DashHeader({
 }) {
   const { dashHex, backHex, setDashHex, setBackHex } = useTheme();
   const persistTimerRef = useRef(null);
+  const [titleEditing, setTitleEditing] = useState(false);
 
   useEffect(
     () => () => {
@@ -80,6 +81,7 @@ export default function DashHeader({
   }
 
   return (
+    <div className="relative">
     <header
       className="left-0 right-0 z-40 border-b border-black/10 backdrop-blur-md shadow-sm"
       style={{
@@ -89,15 +91,13 @@ export default function DashHeader({
     >
       <div className="w-full px-4 sm:px-8">
         <div className="flex items-center justify-between gap-2 min-h-[73px] sm:min-h-[85px]">
-          <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3 relative">
+          <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
             <TitleEdit
               currentTitle={usernameTitle}
-              currentTag={usernameTag}
               isEditMode={isEditMode}
+              editing={titleEditing}
+              onEditingChange={setTitleEditing}
               textColor={lighten(dashHex, 245)}
-              onSave={(newTag, newTitle) => {
-                onTitleSave?.(newTag, newTitle);
-              }}
             />
 
             {isOwner && isEditMode && (
@@ -197,5 +197,18 @@ export default function DashHeader({
         />
       </div>
     </header>
+
+    {titleEditing && isEditMode && (
+      <TitleEditPanel
+        currentTitle={usernameTitle}
+        currentTag={usernameTag}
+        onSave={(newTag, newTitle) => {
+          setTitleEditing(false);
+          onTitleSave?.(newTag, newTitle);
+        }}
+        onClose={() => setTitleEditing(false)}
+      />
+    )}
+    </div>
   );
 }
