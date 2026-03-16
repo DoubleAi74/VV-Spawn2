@@ -322,8 +322,8 @@ export default function CreatePostModal({
         ? "Change Image"
         : "Select Image"
       : thumbnailFile
-        ? "Change Thumbnail"
-        : "Select Thumbnail";
+        ? <><span className="sm:hidden">Thumbnail</span><span className="hidden sm:inline">Change Thumbnail</span></>
+        : <><span className="sm:hidden">Thumbnail</span><span className="hidden sm:inline">Select Thumbnail</span></>;
 
   return (
     <div
@@ -333,10 +333,10 @@ export default function CreatePostModal({
         <div className="flex justify-between items-center mb-6 flex-shrink-0">
           <h2 className="text-lg font-semibold text-white">
             {activeTab === "photo"
-              ? "Post an image"
+              ? <><span className="sm:hidden">Image</span><span className="hidden sm:inline">Post an image</span></>
               : activeTab === "url"
-                ? "Add a URL link"
-                : "Display a file"}
+                ? <><span className="sm:hidden">URL</span><span className="hidden sm:inline">Add a URL link</span></>
+                : <><span className="sm:hidden">File</span><span className="hidden sm:inline">Display a file</span></>}
           </h2>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1 p-1 mr-3 rounded-[3px] bg-white/[0.03]">
@@ -380,7 +380,7 @@ export default function CreatePostModal({
           </div>
         )}
 
-        <div className="flex-grow overflow-y-auto pr-2">
+        <div className="flex-grow overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           <form
             id="create-post-form"
             onSubmit={handleSubmit}
@@ -488,13 +488,15 @@ export default function CreatePostModal({
                         />
                         <label
                           htmlFor="post-file-upload"
-                          className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-[2px] bg-white/[0.06] border border-white/10 text-sm text-white/60 cursor-pointer hover:bg-white/10 hover:text-white/80 hover:border-white/15 active:bg-white/15 transition-all duration-150 ${
+                          className={`flex items-center justify-center gap-2 px-2 sm:px-4 py-2.5 rounded-[2px] bg-white/[0.06] border border-white/10 text-sm text-white/60 cursor-pointer hover:bg-white/10 hover:text-white/80 hover:border-white/15 active:bg-white/15 transition-all duration-150 ${
                             loading ? "opacity-50 cursor-not-allowed" : ""
                           }`}
                         >
                           <FileIcon className="w-4 h-4 flex-shrink-0" />
                           <span className="truncate">
-                            {file ? "Change File" : "Select File"}
+                            {file
+                              ? <><span className="sm:hidden">File</span><span className="hidden sm:inline">Change File</span></>
+                              : <><span className="sm:hidden">File</span><span className="hidden sm:inline">Select File</span></>}
                           </span>
                         </label>
                       </div>

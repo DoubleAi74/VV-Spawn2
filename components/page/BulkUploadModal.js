@@ -235,7 +235,7 @@ export default function BulkUploadModal({
           </div>
         )}
 
-        <div className="flex-grow overflow-y-auto pr-2">
+        <div className="flex-grow overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           <form id="bulk-upload-form" className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-white/60 mb-2">

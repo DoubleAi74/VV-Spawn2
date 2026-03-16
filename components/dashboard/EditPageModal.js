@@ -213,7 +213,7 @@ export default function EditPageModal({ page, itemCount, onClose, onSave }) {
             />
           </div>
 
-          <div className="flex flex-row justify-between pl-1 pr-2 gap-4">
+          <div className="flex flex-row justify-between pl-1 pr-2 gap-4 -mt-2">
             <div className="flex-1 ml-0 pt-6">
               <div className="flex items-center gap-3 py-0 p-1 rounded-[3px]">
                 <label className="flex items-center gap-3 cursor-pointer select-none">

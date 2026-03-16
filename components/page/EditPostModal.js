@@ -350,8 +350,8 @@ export default function EditPostModal({ post, page, itemCount, onClose, onSave }
           ? 'Change Image'
           : 'Select Image'
         : thumbnailFile || hasImagePreview
-          ? 'Change Thumbnail'
-          : 'Select Thumbnail';
+          ? <><span className="sm:hidden">Thumbnail</span><span className="hidden sm:inline">Change Thumbnail</span></>
+          : <><span className="sm:hidden">Thumbnail</span><span className="hidden sm:inline">Select Thumbnail</span></>;
 
   return (
     <div
@@ -361,10 +361,10 @@ export default function EditPostModal({ post, page, itemCount, onClose, onSave }
         <div className="flex justify-between items-center mb-6 flex-shrink-0">
           <h2 className="text-lg font-semibold text-white">
             {contentType === 'photo'
-              ? 'Edit image post'
+              ? <><span className="sm:hidden">Image</span><span className="hidden sm:inline">Edit image post</span></>
               : contentType === 'url'
-                ? 'Edit URL post'
-                : 'Edit file post'}
+                ? <><span className="sm:hidden">URL</span><span className="hidden sm:inline">Edit URL post</span></>
+                : <><span className="sm:hidden">File</span><span className="hidden sm:inline">Edit file post</span></>}
           </h2>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1 p-1 mr-3 rounded-[3px] bg-white/[0.03]">
@@ -407,7 +407,7 @@ export default function EditPostModal({ post, page, itemCount, onClose, onSave }
           </div>
         )}
 
-        <div className="flex-grow overflow-y-auto pr-2">
+        <div className="flex-grow overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           <form id="edit-post-form" onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-white/60 mb-2">Title</label>
@@ -503,13 +503,15 @@ export default function EditPostModal({ post, page, itemCount, onClose, onSave }
                         />
                         <label
                           htmlFor="edit-content-file-upload"
-                          className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-[2px] bg-white/[0.06] border border-white/10 text-sm text-white/60 cursor-pointer hover:bg-white/10 hover:text-white/80 hover:border-white/15 active:bg-white/15 transition-all duration-150 ${
+                          className={`flex items-center justify-center gap-2 px-2 sm:px-4 py-2.5 rounded-[2px] bg-white/[0.06] border border-white/10 text-sm text-white/60 cursor-pointer hover:bg-white/10 hover:text-white/80 hover:border-white/15 active:bg-white/15 transition-all duration-150 ${
                             loading ? 'opacity-50 cursor-not-allowed' : ''
                           }`}
                         >
                           <FileIcon className="w-4 h-4 flex-shrink-0" />
                           <span className="truncate">
-                            {contentFile || existingFileName ? 'Change File' : 'Select File'}
+                            {contentFile || existingFileName
+                              ? <><span className="sm:hidden">File</span><span className="hidden sm:inline">Change File</span></>
+                              : <><span className="sm:hidden">File</span><span className="hidden sm:inline">Select File</span></>}
                           </span>
                         </label>
                       </div>
@@ -529,7 +531,7 @@ export default function EditPostModal({ post, page, itemCount, onClose, onSave }
 
             <div className="flex justify-end">
               <div className="w-32">
-                <label className="block text-sm text-end font-medium text-white/60 mt-[10px] mb-[7px]">
+                <label className="block text-sm text-end font-medium text-white/60 mt-[4px] mb-[7px]">
                   Order Index
                 </label>
                 <input
