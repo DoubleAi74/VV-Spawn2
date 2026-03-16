@@ -50,6 +50,11 @@ export default function LoginPage() {
   const resetToken = searchParams.get("reset");
   const isSigningUp = mode === "signup";
 
+  // Pre-warm the DB connection while the user is typing
+  useEffect(() => {
+    fetch("/api/auth/session");
+  }, []);
+
   useEffect(() => {
     if (status === "authenticated" && session?.user?.usernameTag) {
       router.replace(`/${session.user.usernameTag}`);
@@ -110,11 +115,11 @@ export default function LoginPage() {
       redirect: false,
     });
 
-    setLoading(false);
-
     if (res?.error) {
+      setLoading(false);
       setError(ERROR_MESSAGES.CredentialsSignin);
     }
+    // On success: leave loading=true → full-screen spinner shows until session redirect fires
   }
 
   async function handleMagicLink(e) {
@@ -220,7 +225,7 @@ export default function LoginPage() {
     setShowResetForm(false);
   }
 
-  if (status === "loading" || (magicToken && loading)) {
+  if (status === "loading" || loading || (magicToken && loading)) {
     return <AuthLoadingCard mode={isSigningUp ? "signup" : "login"} />;
   }
 
@@ -268,7 +273,6 @@ export default function LoginPage() {
             value={resetPassword}
             onChange={(e) => setResetPassword(e.target.value)}
             required
-            minLength={8}
             autoComplete="new-password"
             placeholder="New password"
             className={inputClassName}
@@ -280,7 +284,7 @@ export default function LoginPage() {
             className={`w-full rounded-sm py-3 text-sm font-semibold transition-all ${
               loading
                 ? "cursor-not-allowed bg-zinc-300/60 text-neutral-700"
-                : "bg-zinc-300 text-neutral-700 hover:bg-zinc-400"
+                : "bg-zinc-300 text-neutral-700 hover:bg-zinc-400 active:scale-[0.98] active:brightness-90"
             }`}
           >
             {loading ? "Saving…" : "Set new password"}
@@ -322,7 +326,7 @@ export default function LoginPage() {
                 className={`w-full rounded-sm py-3 text-sm font-semibold transition-all ${
                   magicLoading
                     ? "cursor-not-allowed bg-zinc-300/60 text-neutral-700"
-                    : "bg-zinc-300 text-neutral-700 hover:bg-zinc-400"
+                    : "bg-zinc-300 text-neutral-700 hover:bg-zinc-400 active:scale-[0.98] active:brightness-90"
                 }`}
               >
                 {magicLoading ? "Sending…" : "Send email link"}
@@ -367,7 +371,7 @@ export default function LoginPage() {
                 className={`w-full rounded-sm py-3 text-sm font-semibold transition-all ${
                   loading
                     ? "cursor-not-allowed bg-zinc-300/60 text-neutral-700"
-                    : "bg-zinc-300 text-neutral-700 hover:bg-zinc-400"
+                    : "bg-zinc-300 text-neutral-700 hover:bg-zinc-400 active:scale-[0.98] active:brightness-90"
                 }`}
               >
                 {loading ? "Sending…" : "Send reset link"}
@@ -418,7 +422,7 @@ export default function LoginPage() {
               className={`w-full rounded-sm py-3 text-sm font-semibold transition-all ${
                 loading
                   ? "cursor-not-allowed bg-zinc-300/60 text-neutral-700"
-                  : "bg-zinc-300 text-neutral-700 hover:bg-zinc-400"
+                  : "bg-zinc-300 text-neutral-700 hover:bg-zinc-400 active:scale-[0.98] active:brightness-90"
               }`}
             >
               {loading ? "Logging in…" : "Log In"}
@@ -495,7 +499,6 @@ export default function LoginPage() {
             value={signupPassword}
             onChange={(e) => setSignupPassword(e.target.value)}
             required
-            minLength={8}
             autoComplete="new-password"
             placeholder="Password"
             className={inputClassName}
@@ -507,7 +510,7 @@ export default function LoginPage() {
             className={`w-full rounded-sm py-3 text-sm font-semibold transition-all ${
               loading
                 ? "cursor-not-allowed bg-zinc-300/60 text-neutral-700"
-                : "bg-zinc-300 text-neutral-700 hover:bg-zinc-400"
+                : "bg-zinc-300 text-neutral-700 hover:bg-zinc-400 active:scale-[0.98] active:brightness-90"
             }`}
           >
             {loading ? "Creating account…" : "Sign Up"}

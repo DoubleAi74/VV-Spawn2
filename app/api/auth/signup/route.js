@@ -21,13 +21,6 @@ export async function POST(request) {
     );
   }
 
-  if (password.length < 8) {
-    return NextResponse.json(
-      { error: 'Password must be at least 8 characters' },
-      { status: 400 }
-    );
-  }
-
   await connectDB();
 
   const existingUser = await User.findOne({ email: email.toLowerCase().trim() }).lean();
@@ -35,7 +28,7 @@ export async function POST(request) {
     return NextResponse.json({ error: 'An account with this email already exists' }, { status: 409 });
   }
 
-  const passwordHash = await bcrypt.hash(password, 12);
+  const passwordHash = await bcrypt.hash(password, 10);
   const baseTag = toBaseSlug(usernameTitle);
   const usernameTag = await uniqueUsernameTag(baseTag || 'user');
 
