@@ -212,7 +212,7 @@ export default function BulkUploadModal({
                 Single
               </button>
             )}
-            <h2 className="text-lg font-semibold text-white">
+            <h2 className="hidden sm:block text-lg font-semibold text-white">
               Upload Multiple Images
             </h2>
           </div>
