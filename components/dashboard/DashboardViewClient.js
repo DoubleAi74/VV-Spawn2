@@ -141,12 +141,12 @@ export default function DashboardViewClient({ user, initialPages }) {
 
   // ── Delete page ──
   function handleDeletePage(page) {
-    if (
-      !confirm(
-        `Delete "${page.title}"? This will also delete all its posts and files.`,
-      )
-    )
-      return;
+    // if (
+    //   !confirm(
+    //     `Delete "${page.title}"? This will also delete all its posts and files.`,
+    //   )
+    // )
+    return;
     setPages((prev) => prev.filter((p) => p._id !== page._id));
 
     enqueue({

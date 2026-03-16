@@ -1,7 +1,8 @@
 import { auth } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
 import { updatePage, deletePage } from '@/lib/data';
-import { revalidateDashboardAndPage } from '@/lib/revalidation';
+import { revalidateDashboardAndPage, buildPagePath } from '@/lib/revalidation';
+import { revalidatePath } from 'next/cache';
 import Page from '@/lib/models/Page';
 import { NextResponse } from 'next/server';
 
@@ -16,12 +17,21 @@ export async function PATCH(request, { params }) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
 
   const { pageId } = await params;
-  if (!(await ownsPage(session.user.userId, pageId))) {
+  const page = await ownsPage(session.user.userId, pageId);
+  if (!page) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   const data = await request.json();
+  const oldSlug = page.slug;
   const updated = await updatePage(pageId, data);
+
+  if (updated.slug !== oldSlug) {
+    const oldPath = buildPagePath(page.usernameTag, oldSlug);
+    if (oldPath) revalidatePath(oldPath);
+  }
+  revalidateDashboardAndPage(updated.usernameTag, updated.slug);
+
   return NextResponse.json(JSON.parse(JSON.stringify(updated)));
 }
 

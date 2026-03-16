@@ -4,9 +4,22 @@ import { useEffect, useRef, useState } from 'react';
 import { X, Upload, Image as ImageIcon } from 'lucide-react';
 import { processImageForUpload, fetchServerBlur } from '@/lib/processImage';
 
+function toSlugPreview(str) {
+  return str
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 50);
+}
+
 export default function CreatePageModal({ onClose, onCreate }) {
   const [title, setTitle] = useState('');
   const [subtitle, setSubtitle] = useState('');
+  const [slug, setSlug] = useState('');
+  const [slugTouched, setSlugTouched] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
   const [thumbnailFile, setThumbnailFile] = useState(null);
   const [thumbnailPreview, setThumbnailPreview] = useState('');
@@ -81,6 +94,7 @@ export default function CreatePageModal({ onClose, onCreate }) {
       await onCreate({
         title: title.trim(),
         description: subtitle.trim(),
+        ...(slugTouched && slug.trim() ? { slug: slug.trim() } : {}),
         isPrivate,
         thumbnail: publicUrl,
         blurDataURL,
@@ -129,7 +143,11 @@ export default function CreatePageModal({ onClose, onCreate }) {
             <input
               type="text"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setTitle(val);
+                if (!slugTouched) setSlug(toSlugPreview(val));
+              }}
               className="w-full px-4 py-2.5 rounded-[3px] bg-white/5 border border-white/10 text-white/90 placeholder-white/30 focus:outline-none focus:border-white/20 focus:bg-white/[0.06] transition-colors duration-150 focus:ring-1 focus:ring-white/10"
               placeholder="Enter page title"
               maxLength={200}
@@ -147,6 +165,23 @@ export default function CreatePageModal({ onClose, onCreate }) {
               className="w-full px-4 py-2.5 rounded-[3px] bg-white/5 border border-white/10 text-white/90 placeholder-white/30 focus:outline-none focus:border-white/20 focus:bg-white/[0.06] transition-colors duration-150 focus:ring-1 focus:ring-white/10"
               placeholder="Enter subtitle"
               maxLength={500}
+            />
+          </div>
+
+          <div>
+            <div className="flex justify-between items-baseline mb-2">
+              <label className="block text-sm font-medium text-white/60">URL slug</label>
+              <span className="text-xs text-white/30">{slugTouched ? 'Custom' : 'Auto-derived from title'}</span>
+            </div>
+            <input
+              value={slug}
+              onChange={(e) => {
+                setSlug(e.target.value);
+                setSlugTouched(true);
+              }}
+              className="w-full px-4 py-2.5 rounded-[3px] bg-white/5 border border-white/10 text-white/90 placeholder-white/30 focus:outline-none focus:border-white/20 focus:bg-white/[0.06] transition-colors duration-150 focus:ring-1 focus:ring-white/10"
+              placeholder="page-slug"
+              maxLength={100}
             />
           </div>
 

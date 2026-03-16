@@ -5,10 +5,22 @@ import { X, Upload, Image as ImageIcon } from 'lucide-react';
 import { clampOrderIndex } from '@/lib/ordering';
 import { processImageForUpload, fetchServerBlur } from '@/lib/processImage';
 
+function toSlugPreview(str) {
+  return str
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 50);
+}
+
 export default function EditPageModal({ page, itemCount, onClose, onSave }) {
   const [title, setTitle] = useState(page.title || '');
   const [subtitle, setSubtitle] = useState(page.description || '');
   const [slug, setSlug] = useState(page.slug || '');
+  const [slugTouched, setSlugTouched] = useState(false);
   const [orderIndex, setOrderIndex] = useState(page.order_index || 1);
   const [isPrivate, setIsPrivate] = useState(page.isPrivate || false);
   const [thumbnailFile, setThumbnailFile] = useState(null);
@@ -31,6 +43,7 @@ export default function EditPageModal({ page, itemCount, onClose, onSave }) {
     setTitle(page.title || '');
     setSubtitle(page.description || '');
     setSlug(page.slug || '');
+    setSlugTouched(false);
     setOrderIndex(page.order_index || 1);
     setIsPrivate(page.isPrivate || false);
     setThumbnailFile(null);
@@ -106,7 +119,7 @@ export default function EditPageModal({ page, itemCount, onClose, onSave }) {
       await onSave({
         title: title.trim(),
         description: subtitle.trim(),
-        slug: slug.trim(),
+        ...(slugTouched ? { slug: slug.trim() } : {}),
         order_index:
           orderIndex === ''
             ? page.order_index || 1
@@ -160,7 +173,11 @@ export default function EditPageModal({ page, itemCount, onClose, onSave }) {
             <input
               type="text"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setTitle(val);
+                if (!slugTouched) setSlug(toSlugPreview(val));
+              }}
               className="w-full px-4 py-2.5 rounded-[3px] bg-white/5 border border-white/10 text-white/90 placeholder-white/30 focus:outline-none focus:border-white/20 focus:bg-white/[0.06] transition-colors duration-150 focus:ring-1 focus:ring-white/10"
               placeholder="Enter page title"
               required
@@ -180,10 +197,16 @@ export default function EditPageModal({ page, itemCount, onClose, onSave }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-white/60 mb-2">URL slug</label>
+            <div className="flex justify-between items-baseline mb-2">
+              <label className="block text-sm font-medium text-white/60">URL slug</label>
+              <span className="text-xs text-white/30">{slugTouched ? 'Custom' : 'Auto-derived from title'}</span>
+            </div>
             <input
               value={slug}
-              onChange={(e) => setSlug(e.target.value)}
+              onChange={(e) => {
+                setSlug(e.target.value);
+                setSlugTouched(true);
+              }}
               className="w-full px-4 py-2.5 rounded-[3px] bg-white/5 border border-white/10 text-white/90 placeholder-white/30 focus:outline-none focus:border-white/20 focus:bg-white/[0.06] transition-colors duration-150 focus:ring-1 focus:ring-white/10"
               placeholder="page-slug"
               maxLength={100}
