@@ -146,7 +146,7 @@ export default function DashboardViewClient({ user, initialPages }) {
     //     `Delete "${page.title}"? This will also delete all its posts and files.`,
     //   )
     // )
-    return;
+    // return;
     setPages((prev) => prev.filter((p) => p._id !== page._id));
 
     enqueue({
