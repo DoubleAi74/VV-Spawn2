@@ -245,7 +245,7 @@ export default function LoginPage() {
               : showMagicForm
                 ? "Use a secure sign-in link"
                 : isSigningUp
-                  ? "Create your profile to start collecting"
+                  ? "Create your portfolio"
                   : "Welcome back to your collection"}
         </p>
       </div>
@@ -519,7 +519,7 @@ export default function LoginPage() {
       )}
 
       {isSigningUp && (
-        <div className="mt-8 text-center">
+        <div className="mt-auto pt-6 text-center">
           <NextLink
             href="/login"
             className="block text-xs text-zinc-500 hover:text-zinc-300"

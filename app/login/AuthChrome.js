@@ -1,5 +1,5 @@
 const baseCardClassName =
-  "relative w-full overflow-hidden rounded-md border border-white/5 bg-black/60 px-14 py-10 shadow-2xl backdrop-blur-[1px]";
+  "relative w-full overflow-hidden rounded-md border border-white/5 bg-black/60 px-14 py-10 shadow-2xl backdrop-blur-[1px] flex flex-col";
 
 function AuthHeader({ mode }) {
   return (
@@ -63,7 +63,7 @@ function SignupGhost() {
         </div>
       </div>
 
-      <div className="mt-8 text-center">
+      <div className="mt-auto pt-6 text-center">
         <span className="block text-xs text-zinc-500">
           Already have an account? Log In
         </span>
