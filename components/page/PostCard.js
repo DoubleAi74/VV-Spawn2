@@ -94,10 +94,10 @@ export default function PostCard({
         type="button"
         disabled={isOptimistic}
         onClick={handleClick}
-        className={`w-full p-1 rounded-[2px] bg-neutral-200/60 shadow-lg border-[3px] border-neutral-800/20 transition-all duration-100 h-full flex flex-col text-left text-neutral-800/80 ${
+        className={`w-full p-1 rounded-[2px] bg-white/70 shadow-lg border-[3px] border-neutral-900/30 transition-all duration-100 h-full flex flex-col text-left text-neutral-800/80 ${
           isOptimistic
             ? "cursor-default"
-            : "cursor-pointer hover:bg-neutral-300/50 hover:text-neutral-900 focus-visible:ring-2 focus-visible:ring-neutral-700"
+            : "cursor-pointer hover:bg-white/80 hover:text-neutral-900 focus-visible:ring-2 focus-visible:ring-neutral-700"
         }`}
         aria-label={`Open: ${post.title || post.content_type}`}
         aria-disabled={isOptimistic}
@@ -120,7 +120,9 @@ export default function PostCard({
           )}
         </div>
 
-        <div className="px-1 pt-[4px] truncate text-xs font-bold">{post.title || '\u00A0'}</div>
+        <div className="px-1 pt-[4px] truncate text-xs font-bold text-black/90 group-hover:text-black">
+          {post.title || "\u00A0"}
+        </div>
       </button>
 
       {isOptimistic && (

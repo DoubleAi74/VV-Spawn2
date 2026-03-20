@@ -1,8 +1,16 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { Lock, ChevronLeft, ChevronRight, Pencil, Trash2, FileText, X } from 'lucide-react';
-import ImageWithLoader from '@/components/ImageWithLoader';
+import { useState } from "react";
+import {
+  Lock,
+  ChevronLeft,
+  ChevronRight,
+  Pencil,
+  Trash2,
+  FileText,
+  X,
+} from "lucide-react";
+import ImageWithLoader from "@/components/ImageWithLoader";
 
 export default function PageCard({
   page,
@@ -32,7 +40,7 @@ export default function PageCard({
 
   return (
     <div
-      className={`group relative transition-opacity duration-300 ${isOptimistic ? 'opacity-75' : 'opacity-100'}`}
+      className={`group relative transition-opacity duration-300 ${isOptimistic ? "opacity-75" : "opacity-100"}`}
       onMouseLeave={() => setDeletePrime(false)}
     >
       <button
@@ -42,8 +50,10 @@ export default function PageCard({
         onMouseEnter={handlePrefetch}
         onFocus={handlePrefetch}
         onTouchStart={handlePrefetch}
-        className={`w-full text-left p-2 pb-[3px] rounded-[4px] border-[3px] border-neutral-800/20 bg-neutral-200/60 shadow-md h-full transition-colors duration-150 ${
-          isOptimistic ? 'cursor-default' : 'cursor-pointer group-hover:bg-neutral-300/50 focus-visible:ring-2 focus-visible:ring-neutral-700'
+        className={`w-full text-left p-2 pb-[3px]  rounded-[4px] border-[3px] border-neutral-900/30 bg-white/70 shadow-md h-full transition-colors duration-150 ${
+          isOptimistic
+            ? "cursor-default"
+            : "cursor-pointer group-hover:bg-white/80 focus-visible:ring-2 focus-visible:ring-neutral-700"
         }`}
         aria-label={`Open page: ${page.title}`}
         aria-disabled={isOptimistic}
@@ -52,10 +62,12 @@ export default function PageCard({
           <div
             className="w-full aspect-[4/3] mb-1 rounded-sm shadow-md overflow-hidden relative"
             style={{
-              backgroundImage: page.blurDataURL ? `url("${page.blurDataURL}")` : undefined,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              backgroundColor: !page.blurDataURL ? '#cccccc' : undefined,
+              backgroundImage: page.blurDataURL
+                ? `url("${page.blurDataURL}")`
+                : undefined,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              backgroundColor: !page.blurDataURL ? "#cccccc" : undefined,
             }}
           >
             {page.thumbnail && (
@@ -77,9 +89,16 @@ export default function PageCard({
         <div className="flex pl-1 pr-1 items-center justify-between gap-1 h-8 w-full overflow-hidden">
           <div className="flex items-center gap-1 min-w-0 flex-1">
             {page.isPrivate && isOwner && (
-              <Lock size={12} className="text-neutral-600 shrink-0" aria-label="Private page" />
+              <Lock
+                size={12}
+                className="text-neutral-600 shrink-0"
+                aria-label="Private page"
+              />
             )}
-            <h3 className="min-w-0 flex-1 font-bold text-neutral-800/90 text-sm leading-snug line-clamp-2 break-words" title={page.title}>
+            <h3
+              className="min-w-0 flex-1 font-bold text-black/90 group-hover:text-black text-sm leading-snug line-clamp-2 break-words"
+              title={page.title}
+            >
               {page.title}
             </h3>
           </div>
@@ -123,7 +142,9 @@ export default function PageCard({
                 }
               }}
               className={`group p-2 rounded-[3px] shadow-md ${
-                deletePrime ? 'bg-[#610e19]/90 hover:bg-[#610e19]/100' : 'bg-[#610e19]/40 hover:bg-[#610e19]/60'
+                deletePrime
+                  ? "bg-[#610e19]/90 hover:bg-[#610e19]/100"
+                  : "bg-[#610e19]/40 hover:bg-[#610e19]/60"
               }`}
               aria-label="Delete page"
             >

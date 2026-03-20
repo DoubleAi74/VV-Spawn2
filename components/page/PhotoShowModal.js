@@ -392,7 +392,7 @@ export default function PhotoShowModal({
                       prose prose-sm sm:prose-base prose-invert max-w-none
                       text-left whitespace-normal break-normal [text-wrap:pretty]
                       [word-break:normal] [overflow-wrap:normal] [hyphens:manual]
-                      prose-p:my-2 prose-p:leading-7 prose-p:text-neutral-300 first:[&_p]:mt-[-3px]
+                      prose-p:my-2 prose-p:leading-7 prose-p:text-neutral-300 first:[&_p]:mt-[-5px]
                       prose-headings:mb-3 prose-headings:mt-0 prose-headings:font-medium prose-headings:text-neutral-100
                       prose-h1:text-xl prose-h2:text-lg prose-h3:text-base
                       prose-strong:font-semibold prose-strong:text-neutral-100
