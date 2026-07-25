@@ -60,7 +60,7 @@ export async function POST(request) {
   await resend.emails.send({
     from: FROM_EMAIL,
     to: email,
-    subject: 'Sign in to volvox.works',
+    subject: 'Sign in to www.volvox.site',
     html,
     text,
   });

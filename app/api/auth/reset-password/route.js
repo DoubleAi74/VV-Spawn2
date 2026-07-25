@@ -62,7 +62,7 @@ export async function POST(request) {
   await resend.emails.send({
     from: FROM_EMAIL,
     to: email,
-    subject: 'Reset your volvox.works password',
+    subject: 'Reset your www.volvox.site password',
     html,
     text,
   });
