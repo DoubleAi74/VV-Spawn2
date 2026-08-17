@@ -876,6 +876,39 @@ On a scratch page created and deleted for the purpose:
   now commit 1 on `hardening` (`Inherited: page ordering fix (uncommitted work from main)`),
   with no changes of my own mixed in, so `Stage 1:` and `Stage 2:` are clean diffs.
 
+## For Stages 6–9 — what the plan should say differently
+
+Written at the end of the Stage 3–5 run, for whoever picks up Stage 6.
+
+- **MOT-2 has its shell.** `components/Modal.js` owns the backdrop and the panel, and every
+  modal now passes its classes in. The enter/exit transition goes in that one file, and the
+  `prefers-reduced-motion` guard with it.
+- **MOT-3's target has moved.** The 700ms reveal is still in `ImageWithLoader`, but the images
+  it reveals are now 960-wide transforms rather than full originals, so they decode faster and
+  the reveal is a larger share of the perceived delay than the plan assumed.
+- **TCH-4 must preload `buildImageUrl(src, FULL_IMAGE_WIDTH)`** — the exact URL
+  `PhotoShowModal` requests. `lib/cloudflareLoader.js` exports it; do not rebuild the URL by
+  hand or the preload will miss.
+- **TCH-5 (44px hit targets) will touch `ColourInput`** in `DashHeader`, which is now a
+  component rather than two inline `<input type="color">` pairs.
+- **LNK-4 has its luminance helper**: `getLuminance`, `mixHex` and `normalizeHex` are exported
+  from `lib/colour.js`, with `FALLBACK_HEX` and `DEFAULT_INFO_BACKGROUND_HEX` named.
+- **LNK-1's OpenGraph image should ask for a specific bucket.** Social scrapers want roughly
+  1200px; `FULL_IMAGE_WIDTH` (1600) is the closer of the two, and adding a third bucket for
+  OpenGraph is a real cost decision, not a detail.
+- **CLN-1 must not delete `lib/sanitize.js`'s only client consumer without checking**:
+  `PostFileModal` is still the dead file the plan says it is, and nothing imports it, so it is
+  safe to delete — but it is now the *only* thing that would pull `sanitize-html` back into the
+  client bundle, so deleting it protects PERF-5.
+- **CLN-3 is worth more than the plan implies.** `userId` on `Post` would let an orphan sweep
+  exist at all; see the orphaned-post race under "Discovered, not actioned".
+- **CLN-4 should cover `lib/uploadFile.js`.** `isRetryableStatus` and `runWithConcurrency` are
+  pure and testable under plain node, and the retry policy is the kind of rule that decays
+  silently.
+- **STAGES.md's Stage 4 measurements table has been filled in above** with real numbers, and
+  its "fourth reset request" line has been corrected to "sixth" to match the budgets SEC-8
+  actually shipped.
+
 ## Verification limits accepted in this run
 
 The run brief restricts database writes to two pre-authorised operations
