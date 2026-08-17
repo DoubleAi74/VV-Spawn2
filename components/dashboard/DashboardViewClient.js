@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { mergeServerAndOptimistic } from "@/lib/optimisticMerge";
-import { reorderItemsByIndex } from "@/lib/ordering";
+import { reorderItemsByIndex, swapItemsByIds } from "@/lib/ordering";
 import { useQueue } from "@/lib/useQueue";
 import { setDashboardSnapshot } from "@/lib/routeTransitionCache";
 import DashHeader from "@/components/dashboard/DashHeader";
@@ -165,44 +166,76 @@ export default function DashboardViewClient({ user, initialPages }) {
   }
 
   // ── Reorder ──
-  function handleMoveUp(page) {
+  // Swap array positions AND renumber order_index together. Moving one without
+  // the other lets the rendered order drift from the stored order, which is
+  // what allowed duplicate indices to build up.
+  //
+  // Each click queues one relative swap, and the queue runs them in order, so
+  // every response describes the server's state *at that point in the burst*.
+  // Applying an early response to state that already reflects later clicks is
+  // what made a four-place move visibly stagger. Only the newest response is
+  // authoritative; earlier ones are dropped.
+  const reorderSeqRef = useRef(0);
+
+  function moveByOffset(page, offset) {
     const idx = pages.findIndex((p) => p._id === page._id);
-    if (idx <= 0) return;
-    const other = pages[idx - 1];
-    const next = [...pages];
-    [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
-    setPages(next);
+    const targetIdx = idx + offset;
+    if (idx === -1 || targetIdx < 0 || targetIdx >= pages.length) return;
+
+    const other = pages[targetIdx];
+    if (page._optimistic || other._optimistic) return;
+
+    // flushSync so a rapid second click reads the result of this one. Without
+    // it React may not have committed yet, both clicks compute the same move,
+    // and the duplicate cancels the first out.
+    flushSync(() => {
+      setPages(swapItemsByIds(pages, page._id, other._id));
+    });
+
+    const toIndex = targetIdx + 1;
+    const seq = ++reorderSeqRef.current;
 
     enqueue({
       type: "update",
       fn: async () => {
-        await fetch("/api/pages/reorder", {
+        const res = await fetch("/api/pages/reorder", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pageId1: page._id, pageId2: other._id }),
+          body: JSON.stringify({ pageId: page._id, toIndex }),
         });
+        if (!res.ok) throw new Error("Failed to reorder pages");
+
+        const { ordering } = await res.json();
+        // Superseded by a later click — its response will settle the order.
+        if (seq !== reorderSeqRef.current || !Array.isArray(ordering)) return;
+
+        const indexById = new Map(
+          ordering.map((entry) => [entry._id, entry.order_index]),
+        );
+        setPages((currentPages) =>
+          [...currentPages]
+            .map((p) =>
+              indexById.has(p._id)
+                ? { ...p, order_index: indexById.get(p._id) }
+                : p,
+            )
+            .sort((a, b) => (a.order_index || 0) - (b.order_index || 0)),
+        );
+      },
+      // Ordering is server-authoritative, so resync rather than restoring a
+      // snapshot that later clicks in the same burst have already invalidated.
+      onRollback: () => {
+        refreshWithScrollRestore();
       },
     });
   }
 
-  function handleMoveDown(page) {
-    const idx = pages.findIndex((p) => p._id === page._id);
-    if (idx >= pages.length - 1) return;
-    const other = pages[idx + 1];
-    const next = [...pages];
-    [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
-    setPages(next);
+  function handleMoveUp(page) {
+    moveByOffset(page, -1);
+  }
 
-    enqueue({
-      type: "update",
-      fn: async () => {
-        await fetch("/api/pages/reorder", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pageId1: page._id, pageId2: other._id }),
-        });
-      },
-    });
+  function handleMoveDown(page) {
+    moveByOffset(page, 1);
   }
 
   const visiblePages = isOwner ? pages : pages.filter((p) => !p.isPrivate);

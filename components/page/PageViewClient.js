@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Plus, Edit2, Eye, LogOut, ArrowLeft } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { mergeServerAndOptimistic } from "@/lib/optimisticMerge";
-import { reorderItemsByIndex } from "@/lib/ordering";
+import { reorderItemsByIndex, swapItemsByIds } from "@/lib/ordering";
 import { useQueue } from "@/lib/useQueue";
 import { setPageSnapshot } from "@/lib/routeTransitionCache";
 import PostCard from "@/components/page/PostCard";
@@ -245,40 +246,70 @@ export default function PageViewClient({ user, page, initialPosts }) {
   }
 
   // ── Reorder ──
-  function handleMoveLeft(post) {
+  // Swap array positions AND renumber order_index together, then adopt only
+  // the newest server response. See DashboardViewClient for the reasoning:
+  // applying an earlier response to state that already reflects later clicks
+  // makes a multi-place move visibly stagger backwards before settling.
+  const reorderSeqRef = useRef(0);
+
+  function moveByOffset(post, offset) {
     const idx = posts.findIndex((p) => p._id === post._id);
-    if (idx <= 0) return;
-    const other = posts[idx - 1];
-    const next = [...posts];
-    [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
-    setPosts(next);
+    const targetIdx = idx + offset;
+    if (idx === -1 || targetIdx < 0 || targetIdx >= posts.length) return;
+
+    const other = posts[targetIdx];
+    if (post._optimistic || other._optimistic) return;
+
+    // flushSync so a rapid second click reads the result of this one. See
+    // DashboardViewClient for why the duplicate would otherwise cancel out.
+    flushSync(() => {
+      setPosts(swapItemsByIds(posts, post._id, other._id));
+    });
+
+    const toIndex = targetIdx + 1;
+    const seq = ++reorderSeqRef.current;
+
     enqueue({
       type: "update",
-      fn: () =>
-        fetch("/api/posts/reorder", {
+      fn: async () => {
+        const res = await fetch("/api/posts/reorder", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ postId1: post._id, postId2: other._id }),
-        }),
+          body: JSON.stringify({ postId: post._id, toIndex }),
+        });
+        if (!res.ok) throw new Error("Failed to reorder posts");
+
+        const { ordering } = await res.json();
+        // Superseded by a later click — its response will settle the order.
+        if (seq !== reorderSeqRef.current || !Array.isArray(ordering)) return;
+
+        const indexById = new Map(
+          ordering.map((entry) => [entry._id, entry.order_index]),
+        );
+        setPosts((currentPosts) =>
+          [...currentPosts]
+            .map((p) =>
+              indexById.has(p._id)
+                ? { ...p, order_index: indexById.get(p._id) }
+                : p,
+            )
+            .sort((a, b) => (a.order_index || 0) - (b.order_index || 0)),
+        );
+      },
+      // Ordering is server-authoritative, so resync rather than restoring a
+      // snapshot that later clicks in the same burst have already invalidated.
+      onRollback: () => {
+        refreshWithScrollRestore();
+      },
     });
   }
 
+  function handleMoveLeft(post) {
+    moveByOffset(post, -1);
+  }
+
   function handleMoveRight(post) {
-    const idx = posts.findIndex((p) => p._id === post._id);
-    if (idx >= posts.length - 1) return;
-    const other = posts[idx + 1];
-    const next = [...posts];
-    [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
-    setPosts(next);
-    enqueue({
-      type: "update",
-      fn: () =>
-        fetch("/api/posts/reorder", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ postId1: post._id, postId2: other._id }),
-        }),
-    });
+    moveByOffset(post, 1);
   }
 
   // ── Post click ──
