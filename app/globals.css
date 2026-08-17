@@ -137,6 +137,42 @@ body,
   outline-offset: 2px;
 }
 
+/* ── Coarse pointers ──
+   The edit affordances were designed around hover. A device with no hover
+   never reaches the `group-hover:opacity-100` state, so on a phone the
+   controls sit permanently at 70% and edit mode is quietly worse than it is
+   on a desktop.
+
+   Written here rather than as a Tailwind variant because it has to win
+   against `opacity-70` regardless of the order Tailwind emits its utilities
+   in. The doubled class name is specificity (0,2,0) against a utility's
+   (0,1,0) — enough to win outright, without reaching for !important. */
+@media (hover: none) {
+  .touch-controls.touch-controls {
+    opacity: 1;
+  }
+}
+
+/* A 44px hit target on touch, without changing what is drawn. The pseudo
+   element is transparent and belongs to the button, so a tap anywhere in it
+   is a tap on the button. `max()` means a control that is already larger than
+   44px keeps its own size rather than being shrunk to the minimum. */
+@media (pointer: coarse) {
+  .touch-target {
+    position: relative;
+  }
+
+  .touch-target::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+}
+
 /* ── Reduced motion ──
    Everything above this line is decoration. Someone who has asked their system
    for less movement gets the end state immediately, not a faster version of the

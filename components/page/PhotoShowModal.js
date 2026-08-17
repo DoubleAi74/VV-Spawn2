@@ -22,6 +22,21 @@ import { buildRenderableRichText } from "@/lib/richText";
 const cardUrl = (src) => (src ? buildImageUrl(src, CARD_IMAGE_WIDTH) : src);
 const fullUrl = (src) => (src ? buildImageUrl(src, FULL_IMAGE_WIDTH) : src);
 
+// Which image a post shows here. Written once so the preload below asks for
+// exactly what the neighbour will end up requesting — a preload of a slightly
+// different URL is not a preload, it is a second download.
+const displayImageFor = (item) =>
+  item ? item.thumbnail || (item.content_type === "photo" ? item.content : "") : "";
+
+// Swipe thresholds. A drag has to be clearly horizontal before it counts, or
+// scrolling the description with a thumb that drifts sideways would flick to
+// the next photo. Past that, either a deliberate distance or a quick flick
+// will do — a flick still has to travel far enough not to be a tap.
+const SWIPE_AXIS_RATIO = 1.2;
+const SWIPE_MIN_DISTANCE = 60;
+const SWIPE_MIN_VELOCITY = 0.35; // px per ms
+const SWIPE_MIN_FLICK_DISTANCE = 24;
+
 export default function PhotoShowModal({
   post,
   posts = [],
@@ -51,8 +66,7 @@ export default function PhotoShowModal({
 
   const isUrlPost = post.content_type === "url";
   const isFilePost = post.content_type === "file";
-  const displayImageUrl =
-    post.thumbnail || (post.content_type === "photo" ? post.content : "");
+  const displayImageUrl = displayImageFor(post);
   const thumbUrl = post.thumbnail || "";
   const openUrl =
     isUrlPost || isFilePost
@@ -222,6 +236,82 @@ export default function PhotoShowModal({
     return () => window.removeEventListener("keydown", handleKey);
   }, [handlePrev, handleNext]);
 
+  // ── TCH-4: warm the neighbours ──
+  // Only the current post is rendered, so every arrow press and every swipe
+  // waited on the network. An off-screen Image rather than <link rel=preload>:
+  // it populates the same HTTP cache, costs nothing in the document head, and
+  // does not log "preloaded but not used" when the lightbox is closed straight
+  // away. Low priority so it never competes with the image being looked at.
+  const preloadedRef = useRef(new Set());
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    for (const neighbour of [posts[currentIdx - 1], posts[currentIdx + 1]]) {
+      const src = displayImageFor(neighbour);
+      if (!src) continue;
+      const url = fullUrl(src);
+      if (preloadedRef.current.has(url)) continue;
+      preloadedRef.current.add(url);
+      const image = new window.Image();
+      image.fetchPriority = "low";
+      image.decoding = "async";
+      image.src = url;
+    }
+  }, [posts, currentIdx]);
+
+  // ── TCH-3: swipe between posts ──
+  const swipeStartRef = useRef(null);
+
+  const handleSwipeStart = useCallback(
+    (event) => {
+      // A mouse already has the chevrons and the arrow keys; a drag with one is
+      // far more likely to be a text selection.
+      if (event.pointerType === "mouse") return;
+      swipeStartRef.current = {
+        id: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        t: performance.now(),
+      };
+
+      const finish = (endEvent) => {
+        window.removeEventListener("pointerup", finish);
+        window.removeEventListener("pointercancel", cancel);
+        const start = swipeStartRef.current;
+        swipeStartRef.current = null;
+        if (!start || endEvent.pointerId !== start.id) return;
+
+        const dx = endEvent.clientX - start.x;
+        const dy = endEvent.clientY - start.y;
+        const dt = Math.max(1, performance.now() - start.t);
+        const distance = Math.abs(dx);
+
+        // Vertical wins: the description below scrolls, and a thumb rarely
+        // travels in a straight line.
+        if (distance < Math.abs(dy) * SWIPE_AXIS_RATIO) return;
+
+        const velocity = distance / dt;
+        const deliberate = distance >= SWIPE_MIN_DISTANCE;
+        const flick = velocity >= SWIPE_MIN_VELOCITY && distance >= SWIPE_MIN_FLICK_DISTANCE;
+        if (!deliberate && !flick) return;
+
+        if (dx < 0) handleNext();
+        else handlePrev();
+      };
+
+      const cancel = () => {
+        window.removeEventListener("pointerup", finish);
+        window.removeEventListener("pointercancel", cancel);
+        swipeStartRef.current = null;
+      };
+
+      // On window, not the element: a swipe that ends outside the image is
+      // still the gesture the user made.
+      window.addEventListener("pointerup", finish);
+      window.addEventListener("pointercancel", cancel);
+    },
+    [handleNext, handlePrev],
+  );
+
   async function handleDownload(targetUrl) {
     if (!targetUrl) return;
     try {
@@ -297,7 +387,13 @@ export default function PhotoShowModal({
         </div>
 
         <div className="flex-1 overflow-y-auto overscroll-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-          <div className="relative bg-black select-none flex justify-center items-center overflow-hidden h-[65vh] w-full">
+          <div
+            className="relative bg-black select-none flex justify-center items-center overflow-hidden h-[65vh] w-full"
+            onPointerDown={handleSwipeStart}
+            // Vertical panning still belongs to the scroller underneath;
+            // horizontal is the lightbox's own.
+            style={{ touchAction: "pan-y" }}
+          >
             {post.blurDataURL && (
               // eslint-disable-next-line @next/next/no-img-element
               <img

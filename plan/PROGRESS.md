@@ -1109,6 +1109,135 @@ Stage 6 checks from `STAGES.md`:
 - ✔ Modals open and close smoothly with no flash of unstyled content — the panel already
   carries its own background on its first DOM mutation, in all six.
 
+## Stage 7 — Touch parity
+
+Driven on a real mobile context — 390×844 at 3×, `isMobile`, `hasTouch`, iPhone user
+agent — with the browser confirming `(hover: none)` and `(pointer: coarse)` and
+`maxTouchPoints = 1`, not a narrow desktop window. Gestures go through CDP
+`Input.dispatchTouchEvent`, so they are browser-level touch input rather than
+synthesised DOM events. Everything runs on a private scratch page created and deleted
+for the purpose.
+
+- [x] **TCH-1 — edit controls at full opacity on a coarse pointer.** A `.touch-controls`
+  class on the three control clusters in each card, with `@media (hover: none)` in
+  `app/globals.css`. Written as plain CSS rather than a Tailwind variant because it has
+  to beat `opacity-70` regardless of the order Tailwind emits its utilities in: the
+  doubled class name gives specificity (0,2,0) against a utility's (0,1,0), which wins
+  outright without reaching for `!important`.
+
+  **14 control clusters on the page, every one at `opacity: 1`.** On a mouse they are
+  still `0.7` and still rise to `1` on hover.
+
+- [x] **TCH-2 — delete arming that resets.** New `lib/useArmedDelete.js`, shared by both
+  cards. Disarms on a 3-second timeout, on a pointer down anywhere outside the button,
+  and on scroll; the button itself is excluded from the outside-tap rule, or the second
+  tap would disarm the state it is meant to act on. The accessible name changes with the
+  state, so the second tap's consequence is announced and not merely coloured:
+  *"Confirm deleting this post: Doomed"*, and on the dashboard *"Confirm deleting
+  "…" and everything in it"*. `aria-pressed` carries the state too.
+
+  **A real defect found here, and it is not the one the plan describes.**
+  `IMPROVEMENTS.md` says `onMouseLeave` "never fires on touch", so the armed state
+  persists. Measured, with the event stream recorded: in Chrome with touch emulation a
+  tap fires `pointerdown(touch) → pointerup(touch) → mousedown → mouseup → click(touch)`
+  and then, the instant the finger lifts, `mouseout` and `mouseleave` on the card. So
+  the card's `onMouseLeave` disarmed the button **in the same commit that armed it** —
+  `aria-pressed` never sampled `true` at all across 25 polls at 30ms. On touch the
+  delete could not be armed, ever.
+
+  | | tap | mouse click |
+  |---|---|---|
+  | `aria-pressed` after the interaction | **`false`** — 25 consecutive samples | `true` |
+  | events on the card | … `click(touch)`, `mouseout`, **`mouseleave`** | `click(mouse)`, no leave |
+
+  The fix is to make it a *pointer* event: `onPointerLeave` with a
+  `pointerType === 'mouse'` guard. A real mouse leaving the card still disarms; a lifted
+  finger does not. Both readings of the original bug are now covered — the plan's
+  (armed forever) by the timeout and the two taps, and this one by the guard.
+
+  Verified end to end on touch: one tap arms; it disarms itself after 3s; **it disarms
+  on scroll** (asserted only after confirming the document was genuinely 344px taller
+  than the viewport and a scroll event actually fired — the first attempt "passed"
+  against a page that could not scroll, which proves nothing); it disarms on a tap
+  elsewhere; and two taps still delete, `4 posts → 3`.
+
+- [x] **TCH-3 — swipe in the lightbox.** Pointer events on the image area, no gesture
+  library. A drag must be clearly horizontal (`|dx| ≥ 1.2 × |dy|`) and then either
+  deliberate (≥ 60px) or a flick (≥ 0.35 px/ms and ≥ 24px). `touch-action: pan-y` on
+  the image, so vertical panning still belongs to the description scroller underneath.
+  A mouse drag is ignored — that is far more likely to be a text selection, and a mouse
+  already has the chevrons and the arrow keys. The gesture resolves on a `window`
+  listener, so a swipe that ends outside the image still counts.
+
+  | gesture | result |
+  |---|---|
+  | swipe left across the image | Red one → **Green two** |
+  | swipe right | Green two → **Red one**, and on to Blue three and back |
+  | a 15px jab | **nothing** — not a swipe |
+  | a vertical drag with 18px of sideways drift | **does not navigate**, and scrolls the description `scrollTop 0 → 350` |
+
+- [x] **TCH-4 — the neighbours are already fetched.** An off-screen `Image` at
+  `fetchPriority: 'low'` for the previous and next post, keyed on a set so a URL is
+  never requested twice. Chosen over `<link rel="preload">`: it populates the same HTTP
+  cache, costs nothing in the document head, and does not log *"preloaded but not
+  used"* when the lightbox is closed straight away.
+
+  **It asks for exactly what the lightbox will ask for.** The rule for which image a
+  post shows is now a single `displayImageFor(item)` helper used by both the current
+  post and the preload, and the URL is `buildImageUrl(src, FULL_IMAGE_WIDTH)` — 1600,
+  the bucket PERF-1 actually shipped, read from `lib/cloudflareLoader.js` rather than
+  rebuilt by hand.
+
+  Verified on a throttled connection (400 kbps, 300ms latency) with **byte-level
+  accounting through CDP**, because `performance.getEntriesByName` cannot answer this:
+  the images are cross-origin without `Timing-Allow-Origin`, so `transferSize` reads 0
+  for everything, cache hit or not. The first attempt at this check was measuring
+  nothing.
+
+  | | result |
+  |---|---|
+  | `width=1600` requests while photo 1 is on screen | **2** — the current photo and its one neighbour |
+  | requests for photo 2's URL, total | 2 |
+  | of those, going to the network | **1** (489 bytes) |
+  | the other | **0 bytes** — the preload, reused |
+  | photo 2 when it appeared | `complete`, `naturalWidth 64`, `opacity 1` — **no blank frame** |
+
+- [x] **TCH-5 — 44px hit targets, nothing drawn differently.** A `.touch-target` class
+  with a transparent `::after` under `@media (pointer: coarse)`, sized
+  `max(100%, 44px)` so a control already larger than 44px keeps its own size. The
+  pseudo-element belongs to the button, so a tap inside it is a tap on the button.
+
+  | | on touch | on a mouse |
+  |---|---|---|
+  | controls measured | 14 | 14 |
+  | drawn size | **32×32** | **32×32** — unchanged |
+  | hit area | **44px × 44px** | `::after` content is `none` — the rule does not apply |
+  | a tap 21px off-centre, in each of 4 directions | **lands on the control, 4/4, every control** | — |
+
+### Stage 7 gate
+
+| Check | Result |
+|---|---|
+| `npx next lint` | ✔ No ESLint warnings or errors |
+| `node --test lib/*.test.mjs` | 21 pass, 0 fail |
+| `npm run build` | ✔ compiled first attempt |
+| `node scripts/normalize-order.mjs` | 0 corrections |
+| `node scripts/sweep-orphans.mjs` | 0 orphans |
+| First-load JS | `/[usernameTag]` **139 kB** (unchanged), `/[usernameTag]/[pageSlug]` 144 → **145 kB** (the swipe and preload logic) |
+
+Stage 7 checks from `STAGES.md`:
+
+- ✔ Edit mode: every control fully visible without hovering, all ≥44px — measured, both.
+- ✔ Arm delete, wait 3s → disarmed. Arm, scroll → disarmed. Arm, tap elsewhere →
+  disarmed. And two taps still delete.
+- ✔ Swipe left/right moves between posts; the description still scrolls vertically.
+- ✔ On a throttled connection, moving to the next photo shows it with no blank frame,
+  and the preload is reused rather than duplicated — proven in bytes, not in timings.
+
+**Desktop regression check**, separately: controls still hover-revealed at `0.7`, still
+drawn 32×32, no hit-target pseudo element, a mouse click still arms, moving the mouse off
+the card still disarms, and hovering still brings the controls to full opacity.
+
 ## Discovered, not actioned
 
 - **`tailwind.config.js` did not scan `context/`** — found via REL-2, fixed there because the

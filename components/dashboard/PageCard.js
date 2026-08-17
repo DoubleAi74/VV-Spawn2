@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   Lock,
   ChevronLeft,
@@ -11,6 +10,7 @@ import {
   X,
 } from "lucide-react";
 import ImageWithLoader from "@/components/ImageWithLoader";
+import { useArmedDelete } from "@/lib/useArmedDelete";
 
 export default function PageCard({
   page,
@@ -26,7 +26,13 @@ export default function PageCard({
   isLast,
   priority = false,
 }) {
-  const [deletePrime, setDeletePrime] = useState(false);
+  const {
+    isArmed: deletePrime,
+    arm: armDelete,
+    disarm: disarmDelete,
+    handlePointerLeave,
+    buttonRef: deleteButtonRef,
+  } = useArmedDelete();
   const isOptimistic = Boolean(page._optimistic);
 
   function handleOpenPage() {
@@ -45,7 +51,7 @@ export default function PageCard({
       // wrapper element, so the grid layout is unchanged.
       data-flip-key={page._id}
       className={`group relative transition-opacity duration-300 ${isOptimistic ? "opacity-75" : "opacity-100"}`}
-      onMouseLeave={() => setDeletePrime(false)}
+      onPointerLeave={handlePointerLeave}
     >
       <button
         type="button"
@@ -118,7 +124,7 @@ export default function PageCard({
 
       {isOwner && isEditMode && !isOptimistic && (
         <>
-          <div className="absolute bottom-[10px] left-[10px] flex gap-1 opacity-70 group-hover:opacity-100 transition-all duration-200">
+          <div className="touch-controls absolute bottom-[10px] left-[10px] flex gap-1 opacity-70 group-hover:opacity-100 transition-all duration-200">
             <button
               type="button"
               onClick={(e) => {
@@ -126,32 +132,40 @@ export default function PageCard({
                 e.stopPropagation();
                 onEdit(page);
               }}
-              className="group p-2 rounded-[3px] bg-neutral-700/70 shadow-md hover:bg-neutral-700/90"
+              className="touch-target group p-2 rounded-[3px] bg-neutral-700/70 shadow-md hover:bg-neutral-700/90"
               aria-label="Edit page"
             >
               <Pencil className="w-4 h-4 text-neutral-100/70 group-hover:text-neutral-100/90" />
             </button>
           </div>
 
-          <div className="absolute top-[10px] right-[10px] flex gap-1 opacity-70 group-hover:opacity-100 transition-all duration-200">
+          <div className="touch-controls absolute top-[10px] right-[10px] flex gap-1 opacity-70 group-hover:opacity-100 transition-all duration-200">
             <button
               type="button"
+              ref={deleteButtonRef}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 if (!deletePrime) {
-                  setDeletePrime(true);
+                  armDelete();
                 } else {
                   onDelete(page);
-                  setDeletePrime(false);
+                  disarmDelete();
                 }
               }}
-              className={`group p-2 rounded-[3px] shadow-md ${
+              className={`touch-target group p-2 rounded-[3px] shadow-md ${
                 deletePrime
                   ? "bg-[#610e19]/90 hover:bg-[#610e19]/100"
                   : "bg-[#610e19]/40 hover:bg-[#610e19]/60"
               }`}
-              aria-label="Delete page"
+              // Deleting a page takes every post and file inside it with it, so
+              // the armed state says that rather than only turning red.
+              aria-label={
+                deletePrime
+                  ? `Confirm deleting "${page.title || "this page"}" and everything in it`
+                  : "Delete page"
+              }
+              aria-pressed={deletePrime}
             >
               {deletePrime ? (
                 <X className="w-4 h-4 text-neutral-100/70 group-hover:text-neutral-100/90" />
@@ -164,7 +178,7 @@ export default function PageCard({
       )}
 
       {isOwner && isEditMode && !isOptimistic && (
-        <div className="absolute bottom-1/2 translate-y-1/2 w-full px-[10px] flex justify-between opacity-70 group-hover:opacity-100 transition-all duration-200">
+        <div className="touch-controls absolute bottom-1/2 translate-y-1/2 w-full px-[10px] flex justify-between opacity-70 group-hover:opacity-100 transition-all duration-200">
           {!isFirst && (
             <button
               type="button"
@@ -173,7 +187,7 @@ export default function PageCard({
                 e.stopPropagation();
                 onMoveUp(page);
               }}
-              className="group p-[2px] rounded-[2px] shadow-sm mb-3 bg-neutral-700/70 hover:bg-neutral-700/90"
+              className="touch-target group p-[2px] rounded-[2px] shadow-sm mb-3 bg-neutral-700/70 hover:bg-neutral-700/90"
               aria-label="Move page up"
             >
               <ChevronLeft className="w-7 h-7 text-neutral-100/70 group-hover:text-neutral-100/90" />
@@ -188,7 +202,7 @@ export default function PageCard({
                 e.stopPropagation();
                 onMoveDown(page);
               }}
-              className="group p-[2px] rounded-[2px] shadow-sm mt-3 bg-neutral-700/70 hover:bg-neutral-700/90"
+              className="touch-target group p-[2px] rounded-[2px] shadow-sm mt-3 bg-neutral-700/70 hover:bg-neutral-700/90"
               aria-label="Move page down"
             >
               <ChevronRight className="w-7 h-7 text-neutral-100/70 group-hover:text-neutral-100/90" />

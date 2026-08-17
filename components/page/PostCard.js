@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import {
   Link2,
   FileText,
@@ -12,6 +11,7 @@ import {
   X,
 } from 'lucide-react';
 import ImageWithLoader from '@/components/ImageWithLoader';
+import { useArmedDelete } from '@/lib/useArmedDelete';
 
 export default function PostCard({
   post,
@@ -26,7 +26,13 @@ export default function PostCard({
   isLast,
   priority = false,
 }) {
-  const [deletePrime, setDeletePrime] = useState(false);
+  const {
+    isArmed: deletePrime,
+    arm: armDelete,
+    disarm: disarmDelete,
+    handlePointerLeave,
+    buttonRef: deleteButtonRef,
+  } = useArmedDelete();
   const isOptimistic = Boolean(post._optimistic);
 
   function renderThumbnail() {
@@ -93,7 +99,7 @@ export default function PostCard({
       // wrapper element, so the grid layout is unchanged.
       data-flip-key={post._id}
       className={`group relative transition-opacity duration-200 ${isOptimistic ? 'opacity-75' : 'opacity-100'}`}
-      onMouseLeave={() => setDeletePrime(false)}
+      onPointerLeave={handlePointerLeave}
     >
       <button
         type="button"
@@ -140,7 +146,7 @@ export default function PostCard({
 
       {isOwner && isEditMode && !isOptimistic && (
         <>
-          <div className="absolute bottom-[10px] left-[10px] flex gap-1 opacity-70 group-hover:opacity-100 transition-all duration-200">
+          <div className="touch-controls absolute bottom-[10px] left-[10px] flex gap-1 opacity-70 group-hover:opacity-100 transition-all duration-200">
             <button
               type="button"
               onClick={(e) => {
@@ -148,30 +154,39 @@ export default function PostCard({
                 e.stopPropagation();
                 onEdit(post);
               }}
-              className="group p-2 rounded-[3px] bg-neutral-700/70 shadow-md hover:bg-neutral-700/90"
+              className="touch-target group p-2 rounded-[3px] bg-neutral-700/70 shadow-md hover:bg-neutral-700/90"
               aria-label="Edit post"
             >
               <Pencil className="w-4 h-4 text-neutral-100/70 group-hover:text-neutral-100/90" />
             </button>
           </div>
 
-          <div className="absolute top-[10px] right-[10px] flex gap-1 opacity-70 group-hover:opacity-100 transition-all duration-200">
+          <div className="touch-controls absolute top-[10px] right-[10px] flex gap-1 opacity-70 group-hover:opacity-100 transition-all duration-200">
             <button
               type="button"
+              ref={deleteButtonRef}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 if (!deletePrime) {
-                  setDeletePrime(true);
+                  armDelete();
                 } else {
                   onDelete(post);
-                  setDeletePrime(false);
+                  disarmDelete();
                 }
               }}
-              className={`group p-2 rounded-[3px] shadow-md ${
+              className={`touch-target group p-2 rounded-[3px] shadow-md ${
                 deletePrime ? 'bg-[#610e19]/90 hover:bg-[#610e19]/100' : 'bg-[#610e19]/40 hover:bg-[#610e19]/60'
               }`}
-              aria-label="Delete post"
+              // The armed state is announced, not only coloured: the second tap
+              // is the destructive one and a screen reader has no other way to
+              // know that.
+              aria-label={
+                deletePrime
+                  ? `Confirm deleting this post${post.title ? `: ${post.title}` : ''}`
+                  : 'Delete post'
+              }
+              aria-pressed={deletePrime}
             >
               {deletePrime ? (
                 <X className="w-4 h-4 text-neutral-100/70 group-hover:text-neutral-100/90" />
@@ -181,7 +196,7 @@ export default function PostCard({
             </button>
           </div>
 
-          <div className="absolute bottom-1/2 translate-y-1/2 w-full px-[10px] flex justify-between opacity-70 group-hover:opacity-100 transition-all duration-200">
+          <div className="touch-controls absolute bottom-1/2 translate-y-1/2 w-full px-[10px] flex justify-between opacity-70 group-hover:opacity-100 transition-all duration-200">
             {!isFirst && (
               <button
                 type="button"
@@ -190,7 +205,7 @@ export default function PostCard({
                   e.stopPropagation();
                   onMoveLeft(post);
                 }}
-                className="group p-[2px] rounded-[2px] shadow-sm mb-3 bg-neutral-700/70 hover:bg-neutral-700/90"
+                className="touch-target group p-[2px] rounded-[2px] shadow-sm mb-3 bg-neutral-700/70 hover:bg-neutral-700/90"
                 aria-label="Move left"
               >
                 <ChevronLeft className="w-7 h-7 text-neutral-100/70 group-hover:text-neutral-100/90" />
@@ -205,7 +220,7 @@ export default function PostCard({
                   e.stopPropagation();
                   onMoveRight(post);
                 }}
-                className="group p-[2px] rounded-[2px] shadow-sm mt-3 bg-neutral-700/70 hover:bg-neutral-700/90"
+                className="touch-target group p-[2px] rounded-[2px] shadow-sm mt-3 bg-neutral-700/70 hover:bg-neutral-700/90"
                 aria-label="Move right"
               >
                 <ChevronRight className="w-7 h-7 text-neutral-100/70 group-hover:text-neutral-100/90" />
