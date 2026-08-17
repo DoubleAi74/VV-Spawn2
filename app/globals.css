@@ -109,11 +109,6 @@ body,
   min-height: 120px;
 }
 
-/* ── Quill rich text output (prose) ── */
-.quill-output {
-  @apply prose prose-neutral max-w-none;
-}
-
 /* ── Custom scrollbar (webkit) ── */
 ::-webkit-scrollbar {
   width: 6px;

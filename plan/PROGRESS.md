@@ -1421,6 +1421,160 @@ Stage 8 checks from `STAGES.md`:
   the focus ring visible, at 17.7:1 and 20.1:1.
 - ✔ A two-page dashboard does not scroll; a long page shows a scrollbar.
 
+## Stage 9 — Cleanup and tests
+
+- [x] **CLN-1 — dead code.** Re-grepped every target before deleting, as `STAGES.md`
+  insists:
+
+  | target | grep before deleting | action |
+  |---|---|---|
+  | `components/page/PostFileModal.js` | 1 hit — its own definition | deleted |
+  | `components/ActionButton.js` | 1 hit — its own definition | deleted |
+  | `heic2any` | 1 hit — `package.json` only, never imported | `npm uninstall` |
+  | `app/.layout.js.swp`, `app/login/.page.js.swp` | present on disk, gitignored | deleted |
+  | `.quill-output` in `globals.css` | used only by `PostFileModal` | deleted with it |
+  | `.image-loaded`, `blur-up` keyframes | **0 hits — already gone** | removed in MOT-3 |
+
+  Deleting `PostFileModal` also protects PERF-5: it was the last thing that could have
+  pulled `sanitize-html` back into the client bundle. Re-checked after the build — **0
+  of 16 client chunks** contain any of the four `sanitize-html` fingerprints, with a
+  control string from the app's own code found in a chunk so the search is known to work.
+
+  **Two things the plan did not list are now dead, and went too.** Stage 8 replaced the
+  only call sites of `getUserByUsernameTag` and `getPageBySlug` with `resolveUsernameTag`
+  and `resolvePageSlug`. Leaving two near-identical lookups in the data layer is exactly
+  the drift FND was about, so both were removed after confirming zero references.
+
+  **`pageMetaData.infoText1` was not touched.** It is stored on 8 of the 13 live pages
+  and rendered nowhere on purpose — a reserved field, recorded as such in
+  `IMPROVEMENTS.md`'s "Deliberately out of scope" table and called out in `STAGES.md`
+  under this item. Its schema entry, its route, `updatePageMeta`, and the sanitising and
+  prop-passing in the page route are all still there, and the click-through below ran
+  against pages that hold values in it.
+
+- [x] **CLN-2 — `onLoadingComplete` → `onLoad`.** One call site in `ImageWithLoader`.
+  Verified by counting: the full click-through below produced **0 console warnings**,
+  where before every image logged one on every render.
+
+- [x] **CLN-3 — `userId` on `Post`.** Added to the schema with an index, set in
+  `createPost` from the page's owner (never from the caller), and backfilled by a new
+  **`scripts/backfill-post-user.mjs`**, dry-run by default.
+
+  The dry run was **purely additive**, which is what this run was authorised on:
+
+  | | before | after |
+  |---|---|---|
+  | posts | 67 | **67 — unchanged** |
+  | with `userId` | 0 | **67** |
+  | without | 67 | **0** |
+  | modified rather than added | — | **0** |
+
+  The script also refuses to change a `userId` that already exists but disagrees with its
+  page's owner — it reports those and stops, because that would be a different problem
+  than the one it is for. There were none. A second dry run afterwards reports 0
+  remaining.
+
+  **The ownership checks are single-query now.** New `getOwnedPostWithPage(userId, postId)`
+  in `lib/data.js` replaces the "load the post, load its page, compare" pattern in
+  `PATCH`/`DELETE /api/posts/[postId]` and in `POST /api/posts/reorder`. `userOwnsFileUrl`
+  (SEC-2) no longer fetches every page a user owns to build an `$in` list — it is one
+  indexed match. And `scripts/sweep-orphans.mjs` (REL-7) can now name the owner of an
+  orphaned row, which was the point of pairing the two.
+
+- [x] **CLN-4 — test coverage, and `npm test`.** **21 tests → 61**, all passing under
+  `node --test` with no dependencies. `"test": "node --test lib/*.test.mjs"` added to
+  `package.json`.
+
+  | file | tests | covers |
+  |---|---|---|
+  | `lib/ordering.test.mjs` | 9 | the original regression (inherited) |
+  | `lib/reservedTags.test.mjs` | 4 | SEC-6's reserved list (inherited) |
+  | `lib/slug.test.mjs` | 8 | FND-3's shared slug (inherited) |
+  | `lib/optimisticMerge.test.mjs` | **9, new** | `mergeServerAndOptimistic` |
+  | `lib/colour.test.mjs` | **13, new** | FND-2's helpers and LNK-4's contrast guard |
+  | `lib/rateLimitWindow.test.mjs` | **8, new** | SEC-8's budgets and window arithmetic |
+  | `lib/uploadPolicy.test.mjs` | **10, new** | UPL-2's retry policy, UPL-3's concurrency |
+
+  Two small extractions were needed, following the pattern the codebase already uses for
+  `lib/slug.js`, `lib/colour.js` and `lib/reservedTags.js` — pure logic in a module that
+  imports nothing, so a test runner with no bundler can load it:
+  **`lib/rateLimitWindow.js`** (the budgets, `clientIp`, `retryAfterSeconds`; `lib/rateLimit.js`
+  imports mongoose) and **`lib/uploadPolicy.js`** (`isRetryableStatus`, `runWithConcurrency`,
+  the attempt and backoff constants; `lib/uploadFile.js` is a client module importing
+  React). Both are re-exported from their original homes, so no call site changed.
+
+  **Writing the tests found a real gap in LNK-4.** `readableInkOn` used a softened pair —
+  `#f8fafc` and `#111827` — chosen because pure black and white are harsh against muted
+  colour. Sweeping the whole grey ramp and the primaries showed that on **pure red the
+  best of that pair is 4.44:1**, just under WCAG AA, where true black is 5.25:1. It now
+  falls back to the pure pair whenever the soft one cannot reach 4.5:1, so the guarantee
+  holds for every colour rather than most of them. The soft pair still wins everywhere it
+  is comfortable, so nothing about the current theme's appearance changes.
+
+  Two other failures were the tests being wrong, and both are now assertions of what the
+  code actually and correctly does: `normalizeHex` preserves case (FND-2 was an extraction
+  that changed no behaviour), and a tie on `order_index` keeps the server item ahead of an
+  optimistic one, because the sort is stable and the optimistic item is appended.
+
+### The full click-through
+
+On a private scratch page created and deleted for the purpose, driving the real UI:
+
+| | result |
+|---|---|
+| dashboard | 6 cards, header renders, edit mode engages |
+| **upload path 1 — page create** | page created, thumbnail uploaded, progress bar sampled 0 → 100 |
+| **upload path 2 — page edit** | `PATCH` 200, thumbnail replaced, **the old file 404** |
+| **upload path 3 — post create** | post created, and it **carries `userId`**, equal to the page owner |
+| **upload path 4 — bulk** | 3 more posts, **all 4 carry `userId`** |
+| **upload path 5 — post edit** | saved |
+| reorder | a three-place burst = **1 request, `toIndex: 4`**, rendered order == stored order |
+| lightbox | opens; ArrowRight moves on and ArrowLeft comes back (asserted on the image, since these posts have no titles); Escape closes |
+| all six modals | open and close — the five editing modals plus the lightbox |
+| console | **0 errors, 0 warnings** across the whole run |
+| cascade on delete | **9 stored files → all 404**, page row gone, all post rows gone |
+
+**The auth routes**, re-checked because CLN-4 moved the rate-limit budgets into a new
+module — no email sent, every address used has no account so each handler returns before
+Resend:
+
+| check | result |
+|---|---|
+| signup, 1- and 7-character passwords | **400**, "Password must be at least 8 characters" |
+| signup, valid length, address that exists | **409** — past the password gate |
+| magic link, address with no account | 200, nothing sent |
+| password reset request | 200 |
+| reset confirm, bad token / short password | 400 / 400 |
+| **the budget still fires** | requests 1–5 → 200, **6th → 429** with `Retry-After: 890` |
+| accounts created by any of it | **0** (5 → 5) |
+
+*Honesty note:* the first run of that smoke test **guessed** an address for the
+"already exists" case instead of reading one from the database, and so created a real
+account. It was removed immediately with `scripts/delete-user.mjs` (dry run shown, then
+applied: 1 account, 0 pages, 0 posts, 0 files), the account list is back to the same 5,
+and the test now reads the address from the database. The rate-limit windows the test
+created were cleared too; `clear-rate-limits.mjs` reports 0.
+
+### Stage 9 gate
+
+| Check | Result |
+|---|---|
+| `npx next lint` | ✔ No ESLint warnings or errors |
+| `npm test` / `node --test lib/*.test.mjs` | **61 pass, 0 fail** |
+| `npm run build` | ✔ compiled first attempt |
+| `node scripts/normalize-order.mjs` | 0 corrections |
+| `node scripts/sweep-orphans.mjs` | 0 orphans |
+| `node scripts/backfill-post-user.mjs` | 0 remaining |
+| `sanitize-html` in the client bundle | **0 of 16 chunks** |
+| First-load JS | `/[usernameTag]` **141 kB**, `/[usernameTag]/[pageSlug]` **145 kB** |
+
+Stage 9 checks from `STAGES.md`:
+
+- ✔ `npm test` green and covering each area CLN-4 lists.
+- ✔ The backfill dry run reports zero remaining rows after `--commit`.
+- ✔ Full click-through: dashboard, page, edit mode, reorder, lightbox, all six modals,
+  all five upload paths, and the four auth routes.
+
 ## Discovered, not actioned
 
 - **`tailwind.config.js` did not scan `context/`** — found via REL-2, fixed there because the

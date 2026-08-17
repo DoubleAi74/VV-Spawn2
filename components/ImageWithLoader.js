@@ -56,7 +56,7 @@ export default function ImageWithLoader({
     setHasError(false);
   }, [srcKey]);
 
-  const handleLoadingComplete = useCallback(() => {
+  const handleLoad = useCallback(() => {
     rememberLoadedSrc(srcKey);
     setIsLoading(false);
   }, [srcKey]);
@@ -86,7 +86,9 @@ export default function ImageWithLoader({
     // `priority` alone only makes next/image emit a ReactDOM.preload; the
     // fetchpriority hint on both the <img> and that preload comes from this.
     ...(priority ? { fetchPriority: 'high' } : {}),
-    onLoadingComplete: handleLoadingComplete,
+    // `onLoadingComplete` is deprecated in Next 15 and logged a warning for
+    // every image on every render in development.
+    onLoad: handleLoad,
     onError: handleError,
     style,
     className: `${className} ${revealClassName}`.trim(),
