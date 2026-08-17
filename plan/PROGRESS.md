@@ -817,6 +817,102 @@ On a scratch page created and deleted for the purpose:
 | First-load JS | `/[usernameTag]` 136 → **138 kB**, `/[usernameTag]/[pageSlug]` 140 → **143 kB** (the upload helper and progress bar; still 33% below the Stage 0 baseline) |
 | Visual regression vs Stage 4 | 8 of 10 screenshots pixel-identical, 2 within the noise floor |
 
+## Stage 5b — Close the orphan race
+
+Added out of band, after Stage 5 and before Stage 6, on the run owner's instruction.
+The previous run recorded the defect under "Discovered, not actioned"; it is a real
+correctness bug in normal use, so it is now **REL-7** in `IMPROVEMENTS.md` and a stage
+of its own in `STAGES.md`.
+
+- [x] **REL-7 — deleting a page must not orphan an in-flight post.** Prevented on both
+  sides, then swept. **Prevention first: a sweep alone removes the evidence and leaves
+  the mechanism.**
+
+  Three changes, and the ordering between them is the whole fix:
+
+  1. `deletePage` now removes the **`Page` row first**, then collects and deletes the
+     posts. It used to clear the posts first, which widened the window rather than
+     closing it — a create that had passed its ownership check could insert after the
+     cascade had already swept.
+  2. `createPost` **re-reads its page after the insert**. If the parent has gone it
+     deletes the row it just wrote, deletes the files it was handed through
+     `deleteR2Files`, and raises a distinguishable error (`PARENT_PAGE_MISSING`) that
+     `POST /api/posts` turns into a **409** rather than an unhandled 500.
+  3. `useQueue` **holds a delete until the in-flight creates have drained**. Creates
+     run in parallel and deletes serially, in separate lanes, so a delete enqueued
+     during an upload burst previously started alongside them rather than behind them.
+
+  Every interleaving is now covered: a create that inserts before the page row goes is
+  caught by the cascade; one that inserts after undoes itself; one that has not yet
+  inserted fails its own pre-check. (3) stops the request being made at all in the
+  common case; (1) and (2) are what hold when the delete comes from a different tab, or
+  from a dashboard the user navigated back to while the upload was still running —
+  which no client-side ordering can reach.
+
+  **Verified by measuring the before case first**, against real R2 and the real
+  database, on private scratch pages created and deleted for the purpose. A page delete
+  was fired at nine offsets into an in-flight post create:
+
+  | delete fired at | before the fix | after the fix |
+  |---|---|---|
+  | 0 ms | no orphan | no orphan |
+  | 100 / 200 / 300 / 450 ms | **orphaned post row** (4 of 4) | no orphan |
+  | 600 / 800 / 1100 / 1500 ms | no orphan | no orphan |
+  | **offsets producing an orphan** | **4 of 9** | **0 of 9** |
+
+  The "before" column is the previous commit's code, reached by stashing the fix, not
+  by reading it. Those 4 orphans are the ones the sweep then removed (below).
+
+  With a **real R2 object**, delete fired 300 ms into the create:
+
+  | check | result |
+  |---|---|
+  | object before | `HEAD 200` |
+  | create response | **409** `That page was deleted while the post was being created` |
+  | delete response | 200 |
+  | post rows left for that page | **0** |
+  | object after | **`HEAD 404`** — collected, not merely unreferenced |
+
+  **The client half, in the running app.** A bulk upload of three images on a scratch
+  page (three files, so all three occupy create slots and the serial queue is empty),
+  then a post delete clicked the moment the first `POST /api/posts` went out:
+
+  | | before the fix | after the fix |
+  |---|---|---|
+  | delete clicked | 6,040 ms | 5,650 ms |
+  | `DELETE` actually sent | 6,039 ms | **10,913 ms** |
+  | held back after the click | −1 ms | **5,263 ms** |
+  | **creates still in flight when the `DELETE` went out** | **3** | **0** |
+  | posts on the page at rest | 4 | 4 |
+
+  Both runs end with the same visible result, which is exactly why this needed the
+  request timings rather than a look at the grid.
+
+  **The cleanup half: `scripts/sweep-orphans.mjs`**, dry-run by default, `--commit` to
+  apply, following the `normalize-order.mjs` shape. It lists every post whose page no
+  longer exists with its stored files and their live HTTP status, and names the owner
+  where `Post.userId` is present (CLN-3 adds that field; older rows print
+  *"unknown — pre-CLN-3 row"*). Run end to end: dry run found the **4** rows the
+  before-case test had just produced and nothing else — all `slug=racing`, all created
+  inside the test window, 0 stored files between them — `--commit` deleted 4 rows, and
+  the re-run reported **0 orphans across 67 posts and 13 pages**. No pre-existing
+  content was touched.
+
+  *Note:* the previous run's throwaway `clean-orphan.mjs` lived in its scratchpad, not
+  in `scripts/`, so there was nothing committed to reuse. `scripts/sweep-orphans.mjs`
+  is its successor and is now part of the repository.
+
+### Stage 5b gate
+
+| Check | Result |
+|---|---|
+| `npx next lint` | ✔ No ESLint warnings or errors |
+| `node --test lib/*.test.mjs` | 21 pass, 0 fail |
+| `npm run build` | ✔ compiled first attempt, all 26 routes listed |
+| `node scripts/normalize-order.mjs` | 0 corrections |
+| `node scripts/sweep-orphans.mjs` | 0 orphans |
+| First-load JS | `/[usernameTag]` **138 kB**, `/[usernameTag]/[pageSlug]` **143 kB** — unchanged from Stage 5 |
+
 ## Discovered, not actioned
 
 - **`tailwind.config.js` did not scan `context/`** — found via REL-2, fixed there because the
@@ -837,23 +933,21 @@ On a scratch page created and deleted for the purpose:
 - **`getUserById` still returns the whole user document** including `passwordHash`. Nothing
   currently passes its result to a client component, so it is not an exposure today; SEC-1
   only hardened `getUserByUsernameTag`, which was the one that leaked.
-- **`PageInfoEditor` renders only `infoText2`.** `infoText1` is written by the meta route and
-  stored on four live pages, but nothing displays it. Either it is a leftover from an earlier
-  two-field layout or the second field was lost in a refactor — worth a product decision, not a
-  code fix. Not in any item's scope.
+- ~~**`PageInfoEditor` renders only `infoText2`.**~~ **Resolved — not a defect.** The run
+  owner has confirmed `pageMetaData.infoText1` is **reserved for a planned feature**. It is
+  stored on 8 of the 13 live pages and rendered nowhere on purpose. The field, its route and
+  data-layer plumbing, and its stored values stay exactly as they are: not surfaced, not
+  migrated, not merged into `infoText2`, not removed. Recorded in the "Deliberately out of
+  scope" table in `IMPROVEMENTS.md` and called out in `STAGES.md` under CLN-1 so a future
+  dead-code pass does not mistake it for an oversight.
 - **The dashboard info editor's read-only branch is unreachable in the current data.** It only
   renders when the viewer is not in edit mode *and* `dashboard.infoText` has visible content,
   and no account has any. Noted because it means that code path is untested by any browser
   check in this run.
-- **Deleting a page while creates are still in flight can orphan a post.** Found in this run's
-  own bulk test: `deletePage` runs `Post.deleteMany({ pageId })`, and a create request that was
-  already queued client-side inserts afterwards, leaving a post row whose page no longer exists
-  and an R2 object nothing will ever collect. One such row was produced by a 20-image test and
-  has been cleaned up (dry run shown, then applied; the object is now 404 and the sweep reports
-  0 orphans). The window is small and needs a delete racing an in-flight create, but it is real
-  and it is in the app, not only in the test — a user who deletes a page mid-upload can hit it.
-  A `userId` on `Post` (**CLN-3**) plus an orphan sweep in `scripts/` would close it; Stage 9 is
-  the natural home.
+- ~~**Deleting a page while creates are still in flight can orphan a post.**~~ **Actioned —
+  this is now REL-7, done in Stage 5b above.** Raised as a real defect in normal use rather
+  than a test artefact, and closed by preventing the race on both the client and the server
+  rather than by sweeping after it. The sweep exists as the cleanup half only.
 - **`javascript-creations` holds 30 posts** — the largest page in the database and a useful
   target for the PERF-1 measurement if it is repeated later; the pages measured in Stage 4 have
   6–8.

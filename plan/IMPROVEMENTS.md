@@ -469,6 +469,57 @@ sequence of creates, deletes and a forced create failure.
 
 ---
 
+### REL-7 — Deleting a page must not orphan an in-flight post
+
+**Severity: high.** Found while verifying [UPL-3](#upl-3--parallel-bulk-upload) — in
+normal use, not only under test.
+
+Deleting a page while a post create for that page is still on the wire leaves a post
+row whose `pageId` points at nothing, and an R2 object nothing will ever collect. The
+row is invisible: no route lists it, no cascade will reach it, and the file is billed
+forever. A user who deletes a page mid-upload hits this.
+
+There are two independent windows:
+
+1. **Client.** `lib/useQueue.js` runs creates in parallel and deletes serially, in
+   separate lanes. A delete enqueued during an upload burst therefore starts while
+   creates are still in flight, rather than behind them.
+2. **Server.** `createPost` checks its page exists and then inserts, so the page can
+   be deleted between the two. Worse, `deletePage` cleared the posts *before*
+   removing the page row, which widened the window rather than closing it: a create
+   that passed its ownership check could insert after the cascade had already swept.
+
+**Decision taken: prevent the race, then sweep what it already produced.** A sweep on
+its own is a mop — it removes the evidence and leaves the mechanism.
+
+**Target.** Order the operations so that no interleaving can leave a surviving child:
+
+- `deletePage` removes the `Page` row **first**, then collects and deletes the posts.
+- `createPost` re-reads its page **after** the insert. If the parent has gone, it
+  deletes the row it just wrote, cleans up the files it was handed, and raises a
+  distinguishable error so the route can answer 409 rather than 500.
+- `useQueue` holds a delete until the in-flight creates have drained.
+
+Together these cover every ordering. A create that inserts before the page row goes is
+caught by the cascade; one that inserts after undoes itself; one that has not yet
+inserted fails its own pre-check. The client half stops the request being made at all
+in the common case; the server half is what holds when the two operations come from
+different tabs, or from a page the user has already navigated away from.
+
+The cleanup half is `scripts/sweep-orphans.mjs` — dry-run by default, `--commit` to
+apply, following the `normalize-order.mjs` pattern. [CLN-3](#cln-3--denormalise-userid-onto-post)
+gives it `Post.userId`, so rows written after that name their owner even once the page
+is gone.
+
+**Files.** `lib/data.js` (`deletePage`, `createPost`), `lib/useQueue.js`,
+`app/api/posts/route.js`, new `scripts/sweep-orphans.mjs`.
+
+**Done when.** Firing a page delete at a spread of offsets into an in-flight post
+create leaves no post row at any offset, and the uploaded file is collected. The
+sweep reports zero orphans. Assert on the database, not on the response codes.
+
+---
+
 ## FND — Shared foundations
 
 These are extractions. They change no behaviour, and they are scheduled **before**
@@ -1104,3 +1155,4 @@ become necessary, raise it rather than building it.
 | **A test framework (Vitest, Jest)** | Node's built-in runner covers the pure logic with no dependencies. Only worth revisiting for component tests. |
 | **Rewriting the optimistic queue** | The architecture is sound. It needs error reporting ([REL-2](#rel-2--make-failed-mutations-visible)), not replacement. |
 | **`scripts/migrate.mjs`** | A one-off Firebase migration that has already run. Leave it untouched. |
+| **`pageMetaData.infoText1`** | Stored on 8 of the 13 live pages and rendered nowhere — `PageInfoEditor` displays `infoText2` only. **This is deliberate: the field is reserved for a planned feature.** Leave the field, its route and data-layer plumbing, and its stored values exactly as they are. Do not surface it, migrate it, merge it into `infoText2`, or remove it, and do not let [CLN-1](#cln-1--delete-dead-code)'s dead-code sweep treat it as an oversight. |

@@ -1,6 +1,6 @@
 import { auth } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
-import { createPost } from '@/lib/data';
+import { createPost, isParentPageMissingError } from '@/lib/data';
 import Page from '@/lib/models/Page';
 import { revalidateDashboardAndPage } from '@/lib/revalidation';
 import { INVALID_POST_URL_MESSAGE, isHttpUrl } from '@/lib/postUrl';
@@ -40,7 +40,22 @@ export async function POST(request) {
     );
   }
 
-  const post = await createPost(pageId, rest);
+  let post;
+  try {
+    post = await createPost(pageId, rest);
+  } catch (error) {
+    // The page was deleted while this create was in flight. createPost has
+    // already undone its own insert and cleaned up the uploaded files, so
+    // there is nothing left to report but the conflict itself. See REL-7.
+    if (isParentPageMissingError(error)) {
+      return NextResponse.json(
+        { error: 'That page was deleted while the post was being created' },
+        { status: 409 }
+      );
+    }
+    throw error;
+  }
+
   revalidateDashboardAndPage(page.usernameTag, page.slug);
   return NextResponse.json(JSON.parse(JSON.stringify(post)));
 }

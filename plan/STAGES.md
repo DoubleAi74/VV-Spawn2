@@ -283,6 +283,39 @@ Commit `Stage 5: Uploads that survive a bad connection`.
 
 ---
 
+## Stage 5b — Close the orphan race
+
+**Items:** REL-7
+**Depends on:** Stage 5 (the race was found while verifying UPL-3).
+
+Added after Stage 5, out of the original nine. Verifying the parallel bulk upload
+turned up a real defect in normal use: deleting a page while a post create for it is
+still on the wire leaves a post row with no page and an R2 object nothing will ever
+collect. It is scheduled here rather than folded into Stage 9 because it is a
+correctness bug that silently costs money, and because everything after this point
+touches the same client queue.
+
+1. **REL-7** — Prevent the race on both sides, then sweep what it already produced.
+   `deletePage` removes the parent row before the cascade; `createPost` re-reads its
+   page after the insert and undoes itself if the parent has gone; `useQueue` holds
+   deletes until in-flight creates drain. **Prevention first — a sweep on its own is
+   a mop.**
+
+**Verification.** Gate, plus:
+- Fire a page delete at a spread of offsets into an in-flight post create. **Measure
+  the before case as well**: some offsets must orphan a post without the fix, or the
+  test is not exercising the window.
+- One iteration with a real R2 object: the file must end up 404, not merely the row.
+- In the running app, start a bulk upload and delete an item while it runs: the
+  `DELETE` must not be sent until the last create response has arrived. Assert on the
+  request timings, not on the end state.
+- `node scripts/sweep-orphans.mjs` reports zero orphans.
+
+**Exit:** no interleaving of a page delete and a post create leaves a row behind.
+Commit `Stage 5b: Close the orphan race`.
+
+---
+
 ## Stage 6 — Motion
 
 **Items:** MOT-1 · MOT-2 · MOT-3 · MOT-4 · MOT-5
@@ -400,11 +433,15 @@ behavioural change.
 1. **CLN-1** — Delete `PostFileModal.js`, `ActionButton.js`, the `heic2any`
    dependency, the two `.swp` files, and the now-dead `.quill-output`, `.image-loaded`
    and `blur-up` CSS. **Re-grep for each before deleting** — earlier stages may have
-   started using something.
+   started using something. **`pageMetaData.infoText1` is not dead code.** It is
+   stored, plumbed and rendered nowhere on purpose — a reserved field. Leave it and
+   every part of its route, data-layer and component plumbing alone.
 2. **CLN-2** — `onLoadingComplete` → `onLoad`.
 3. **CLN-3** — `userId` on `Post`, set in `createPost`, backfilled by a new dry-run
    script following the `normalize-order.mjs` pattern; then simplify the ownership
-   checks in the post routes.
+   checks in the post routes. Once the field exists,
+   `scripts/sweep-orphans.mjs` (REL-7) can name the owner of an orphaned row —
+   re-run it and confirm it still reports zero.
 4. **CLN-4** — Extend tests to cover `mergeServerAndOptimistic`, the shared slug
    function, the reserved username list, the colour and contrast helpers, and the rate
    limit window. Add `"test": "node --test lib/*.test.mjs"` to `package.json`.
