@@ -131,7 +131,9 @@ Sequential is faster than resolving the conflicts.
 - Cross-account file delete: 403.
 - Unauthenticated `/api/generate-blur`: 401. Off-origin URL when authenticated: 400.
 - `/admin` logged out: 404. As the configured admin: renders.
-- Fourth reset request inside the window: 429, no email sent.
+- Sixth reset request for one address inside the window: 429, no email sent. (Written
+  as "fourth" originally; the budget actually chosen in SEC-8 is 5 per address per 15
+  minutes, so the sixth is the first refusal. Corrected to match what shipped.)
 - Signup, login, magic link and password reset all still work end to end.
 
 **Exit:** all six checks pass. Commit `Stage 1: Lock it down`.
@@ -157,6 +159,8 @@ properly rather than quickly.
    `makeUploadItem` on mount.
 5. **REL-5** — Batch R2 deletes with `DeleteObjectsCommand`; delete DB rows first.
    **Test on a page you create for the purpose. Do not test this on real content.**
+   (Done: the storage half in the Stage 2 run, the database cascade at the start of the
+   Stage 3–5 run once scratch-page writes were authorised.)
 6. **REL-6** — Stop treating `pageCount`/`postCount` as authoritative where
    correctness matters, or call the reconcile functions on the create-failure path.
 

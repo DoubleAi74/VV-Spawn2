@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Check, X, Pencil } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { toBaseSlug } from "@/lib/slug";
 
 // Inline button + title display (rendered inside DashHeader)
 export default function TitleEdit({
@@ -64,15 +65,7 @@ export function TitleEditPanel({ currentTitle, currentTag, onSave, onClose }) {
     setValue(currentTitle || "");
   }, [currentTitle]);
 
-  const previewTag =
-    value
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "")
-      .slice(0, 50) || currentTag;
+  const previewTag = toBaseSlug(value) || currentTag;
 
   async function handleSave() {
     if (!value.trim()) return;

@@ -5,14 +5,8 @@ import { revalidateDashboardAndPage } from '@/lib/revalidation';
 import { INVALID_POST_URL_MESSAGE, isHttpUrl } from '@/lib/postUrl';
 import Post from '@/lib/models/Post';
 import Page from '@/lib/models/Page';
-import sanitizeHtml from 'sanitize-html';
+import { sanitizeRichText } from '@/lib/sanitize';
 import { NextResponse } from 'next/server';
-
-const SANITIZE_OPTIONS = {
-  allowedTags: ['b', 'i', 'em', 'strong', 'a', 'p', 'br', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'blockquote', 'code', 'pre'],
-  allowedAttributes: { a: ['href', 'target', 'rel'] },
-  allowedSchemes: ['http', 'https', 'mailto'],
-};
 
 async function getOwnedPost(userId, postId) {
   await connectDB();
@@ -36,7 +30,7 @@ export async function PATCH(request, { params }) {
 
   const data = await request.json();
   if (data.description) {
-    data.description = sanitizeHtml(data.description, SANITIZE_OPTIONS);
+    data.description = sanitizeRichText(data.description);
   }
 
   const nextContentType = data.content_type || existingPost.content_type;

@@ -6,37 +6,7 @@ import { LogOut, Edit2, Eye } from "lucide-react";
 import { signOut } from "next-auth/react";
 import TitleEdit, { TitleEditPanel } from "@/components/dashboard/TitleEdit";
 import { useTheme } from "@/context/ThemeContext";
-
-function normalizeHex(hex, fallback = "#000000") {
-  const value = String(hex || "").trim();
-  if (/^#[0-9a-fA-F]{6}$/.test(value)) return value;
-  if (/^[0-9a-fA-F]{6}$/.test(value)) return `#${value}`;
-  return fallback;
-}
-
-export function lighten(hex, amount = 30) {
-  const safeHex = normalizeHex(hex);
-  const clean = safeHex.replace("#", "");
-  let r = parseInt(clean.substring(0, 2), 16);
-  let g = parseInt(clean.substring(2, 4), 16);
-  let b = parseInt(clean.substring(4, 6), 16);
-
-  r = Math.max(0, Math.min(255, r + amount));
-  g = Math.max(0, Math.min(255, g + amount));
-  b = Math.max(0, Math.min(255, b + amount));
-
-  const toHex = (v) => v.toString(16).padStart(2, "0");
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-}
-
-export function hexToRgba(hex, alpha = 1) {
-  const safeHex = normalizeHex(hex);
-  const clean = safeHex.replace("#", "");
-  const r = parseInt(clean.substring(0, 2), 16);
-  const g = parseInt(clean.substring(2, 4), 16);
-  const b = parseInt(clean.substring(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
+import { lighten } from "@/lib/colour";
 
 export default function DashHeader({
   usernameTitle,

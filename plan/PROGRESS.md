@@ -342,10 +342,22 @@ observed suggests any of them is broken; nothing observed proves the full round 
   `{ deleted: 5, failed: 0 }` in 2.6s and all five `HEAD`s went 200 → **404**. Empty input is a
   no-op.
 
-  **⚠ Not fully verified — needs your say-so.** The end-to-end cascade (create a scratch page
-  with several posts, delete it, confirm records and files are gone) requires creating and
-  deleting real database records, which this run's brief does not authorise. The storage half
-  is proven above; the database-first ordering is code review only.
+  **✔ Completed at the start of the Stage 3–5 run** (the cascade was authorised there). A
+  scratch page was created through the real API with 5 uploaded R2 objects and 3 posts (photo,
+  file, text), then deleted through `DELETE /api/pages/[pageId]`:
+
+  | check | before delete | after delete |
+  |---|---|---|
+  | page row | exists | **gone** |
+  | post rows for that page | 3 | **0** |
+  | `page.postCount` | 3 | — |
+  | `user.pageCount` | 7 | **6** (reconciled, not `$inc`-ed) |
+  | the 5 R2 objects | all **200** | all **404** |
+  | the 6 pre-existing pages' `order_index` | 1–6 | **1–6, unchanged** |
+
+  The delete returned 200 in **8.2s** in dev (one batched `DeleteObjects` call, not five round
+  trips). `node scripts/normalize-order.mjs` reported 0 corrections afterwards. Nothing
+  pre-existing was touched: the scratch page was private, created and destroyed by the test.
 
 - [x] **REL-6 — stop treating the counters as authoritative.** `createPage` no longer
   increments `pageCount` before the insert and no longer derives `order_index` from
@@ -378,13 +390,173 @@ Stage 2 checks from `STAGES.md`:
 - ✔ Force a server component throw: custom boundary renders, retry recovers.
 - ✔ Bulk modal: select images, add more, all thumbnails remain (and their object URLs stay
   alive, which is the sharper version of the same check).
-- ⚠ Delete a scratch page with several posts — **not done**: it needs database writes this run
-  is not authorised to make. See REL-5.
+- ✔ Delete a scratch page with several posts — **done retrospectively at the start of the
+  Stage 3–5 run**, once it was authorised. See REL-5 above for the table.
 - ✔ `normalize-order` reports 0 after the create-failure sequence that was exercised.
 
 Also re-checked: a normal signed-in load of the dashboard and a page produces **zero console
 errors**. The only warnings are the known deprecated `onLoadingComplete` ones, which CLN-2
 removes in Stage 9.
+
+## Stage 3 — Shared foundations
+
+Pure extraction. Ten baseline screenshots (dashboard, dashboard in edit mode, a page, a page
+in edit mode, and all six modals) were captured **before** any Stage 3 change and re-captured
+after FND-4; see the FND-4 entry for the comparison.
+
+- [x] **FND-1 — one sanitiser.** New `lib/sanitize.js` exports `SANITIZE_OPTIONS` and
+  `sanitizeRichText(value)`. All seven copies are gone: `api/posts`, `api/posts/[postId]`,
+  `api/pages/[pageId]/meta`, `api/user/dashboard`, `PageInfoEditor`, `DashboardInfoEditor` and
+  the dead `PostFileModal`. `grep -rn "SANITIZE_OPTIONS\|sanitizeHtml\|sanitize-html" app
+  components context` now returns nothing outside `lib/sanitize.js`.
+
+  Anchors carrying `target` now get `rel="noopener"` appended (existing rel values preserved),
+  which is the hole `IMPROVEMENTS.md` names. Verified two ways:
+
+  1. **Function-level equivalence over an 18-case corpus** (headings, lists, blockquote,
+     `pre`/`code`, entities, `javascript:` href, `<script>`, `<img onerror>`, inline `style`,
+     unlisted tags, empty/whitespace): old options and new produce **byte-identical output in
+     16 cases**, and differ in exactly the two intended ones —
+     `target="_blank"` with no rel → `rel="noopener"` added; `target="_blank" rel="noreferrer"`
+     → `rel="noreferrer noopener"`. An anchor that already has `noopener` is untouched.
+  2. **In the running app**, on a scratch page created and deleted for the purpose (no real
+     content touched): a corpus of every allowed tag was written through
+     `PATCH /api/pages/[pageId]/meta` and the rendered `.page-content` innerHTML compared to
+     what the *old* sanitiser produces from the stored value, normalised through the same DOM.
+     **Identical, 512 characters.** The DOM's anchors read `-|-`, `_blank|noopener`, `-|-`,
+     i.e. the fix is live and only touches targeted links. The lightbox description also still
+     renders (`PhotoShowModal` goes through `lib/richText.js`, which FND-1 does not touch).
+
+  *Not exercised:* `DashboardInfoEditor`'s sanitised branch. It only renders when the viewer is
+  **not** in edit mode and the user's `dashboard.infoText` has visible content, and no account
+  in the database has any — the owner's is whitespace-only, so the component returns `null`.
+  Giving it content means writing to a real user document, which is outside this run's
+  authorised writes. Its diff is the same two lines as `PageInfoEditor`'s, whose render is
+  verified above.
+
+- [x] **FND-2 — one colour module.** New `lib/colour.js` (no imports, so anything can use it)
+  exports `normalizeHex`, `hexToRgb`, `hexToRgba`, `lighten`, `mixHex`, `getLuminance` and
+  `getInfoPalette`. Six copies removed: `PageInfoEditor`, `DashboardInfoEditor`, `DashHeader`,
+  **`ThemeContext`** (a fifth copy the plan did not list) and both `loading.js` files.
+  `PageViewClient` imported `lighten`/`hexToRgba` *from `DashHeader`* — a component importing
+  helpers out of another component — and now imports them from `lib/colour.js`, so `DashHeader`
+  exports only its component again.
+
+  The copies did not agree on the fallback colour when handed an unusable hex — `#000000` in
+  `DashHeader`, `#e5e7eb` in the info editors, `#2d3e50` in `lighten` inside both `loading.js`
+  files. The shared functions take the fallback as a trailing argument, and each call site
+  passes the one its own copy used, so no reachable behaviour changes.
+
+  Verified by **differential test against the pre-FND-2 implementations, copied verbatim**:
+  18 hex inputs (valid, unprefixed, empty, `null`, `undefined`, malformed, whitespace-padded)
+  × `normalizeHex` under three fallbacks, `lighten` at 5 amounts under both fallbacks,
+  `hexToRgba` at 4 alphas under all three fallbacks, `getLuminance`, `mixHex` at 6 weights
+  (including out-of-range) and the whole `getInfoPalette` object — **zero mismatches**.
+
+  In the running app: the dashboard and page pixel-compare against their pre-Stage-3
+  screenshots with **every header, rule, border, panel and text pixel identical** — the only
+  differing pixels are inside lazily-loaded card images below the fold, which decode at
+  different moments run to run (the screenshot script now waits for them). The loading skeleton
+  was captured mid-navigation and its computed styles are exactly what the helpers predict:
+  header `rgb(59, 59, 59)` = `#3b3b3b`, rule `rgb(89, 89, 89)` = `lighten('#3b3b3b', 30)`,
+  page background `rgba(204, 204, 204, 0.5)` = `hexToRgba('#cccccc', 0.5)`.
+
+- [x] **FND-3 — one slug function.** New `lib/slug.js` (no imports, so client components,
+  `lib/data.js` and a plain-node test can all load it) exports `toBaseSlug` and
+  `MAX_SLUG_LENGTH`. The three client copies are gone — `CreatePageModal`, `EditPageModal` and
+  the inline one in `TitleEdit` — and `lib/data.js` imports it and re-exports it, because the
+  signup and title routes have always imported `toBaseSlug` from there.
+
+  One deliberate difference: `toBaseSlug` now coerces with `String(value ?? '')`. The old
+  version called `.toLowerCase()` straight on its argument, so `createPost` with neither a
+  title nor a `content_type` threw a `TypeError` inside the route rather than producing an
+  empty base slug the caller already handles. Nothing else changes.
+
+  `lib/slug.test.mjs` adds **8 tests** (21 total, all pass): punctuation, non-Latin scripts and
+  emoji, whitespace collapsing, hyphen trimming, truncation at 50, the trailing hyphen that
+  truncation can leave, empty/`null`/`undefined`, and idempotence.
+
+  Verified in the running app that the preview matches the URL actually assigned:
+
+  | input | CreatePageModal | EditPageModal | TitleEdit | server |
+  |---|---|---|---|---|
+  | `Adam's PhD (2024): notes!` | `adams-phd-2024-notes` | same | same | **`adams-phd-2024-notes`** |
+  | `C++ / Rust & Go` | `c-rust-go` | same | same | — |
+  | `  Spaced   Out  ` | `spaced-out` | same | same | — |
+  | `Café Möbius` | `caf-mbius` | same | same | — |
+  | `こんにちは world` | `world` | same | same | **`world`** |
+  | `🎉 party 🎉` | `party` | same | — | — |
+  | `--- dashes ---` | `dashes` | same | — | — |
+  | 60 `A`s + ` tail` | 50 `a`s | same | — | **50 `a`s** |
+  | `word ` × 20 | `word-…-word-` (50) | same | — | — |
+
+  The three "server" rows are real scratch pages created by title alone through
+  `POST /api/pages` and deleted again; `normalize-order` reports 0 corrections afterwards.
+
+- [x] **FND-4 — one modal shell.** New `components/Modal.js` owns the backdrop, the body-scroll
+  lock (with scrollbar-width compensation and a shared open-count, so one modal replacing
+  another cannot unlock the page underneath it), Escape, backdrop click, `role="dialog"`,
+  `aria-modal="true"`, the accessible name, focus-into-the-panel on open, a Tab/Shift-Tab trap
+  that re-reads the focusable set on every keypress, and focus restore to the trigger on close.
+  Each modal keeps its own backdrop and panel classes — the shell owns behaviour, not
+  appearance. Six converted: `CreatePageModal`, `EditPageModal`, `CreatePostModal`,
+  `EditPostModal`, `BulkUploadModal` and `PhotoShowModal`.
+
+  Details worth knowing:
+  - **Focus lands on the panel, not the first field.** Focusing the first input would put a
+    focus ring on a control the user did not choose — a visible change. The panel takes
+    `tabIndex={-1}` and `focus:outline-none`.
+  - **A backdrop click only closes if the press *started* on the backdrop.** Otherwise dragging
+    to select text inside the panel and releasing outside would dismiss the modal.
+  - **The two post modals name themselves explicitly** rather than through their heading. The
+    heading renders a short and a long form (`<span className="sm:hidden">Image</span>` +
+    `<span className="hidden sm:inline">Post an image</span>`), and an accessible name computed
+    from it concatenates both — a screen reader announced *"ImagePost an image"*. Caught by
+    reading the computed name, not by looking at the code.
+  - `PhotoShowModal` keeps its own arrow-key handler; only its Escape branch moved to the shell.
+
+  **Behaviour verified in the browser, all six modals, 66 checks, all pass:** `role="dialog"`
+  and `aria-modal="true"` present; a sensible accessible name (*Create New Page*, *Edit Page*,
+  *Post an image*, *Edit file post*, *Upload multiple images*, *Image lightbox*); focus inside
+  the dialog on open; Tab pressed (focusables + 3) times — up to 24 — never escapes; Shift+Tab
+  stays inside; Escape closes; backdrop click closes; `document.body.style.overflow` is
+  `hidden` while open and restored after; focus returns to the exact button that opened it.
+  The lightbox's ArrowRight/ArrowLeft still move between posts.
+
+  **`BulkUploadModal` had no Escape handler at all before this** — the only one of the six that
+  could not be dismissed from the keyboard. Found by writing the screenshot script, which hung
+  waiting for it to close.
+
+  **No visual change.** Ten screenshots (dashboard, dashboard in edit mode, page, page in edit
+  mode, all six modals) at 1440×900 @2x, pixel-compared before and after FND-4:
+
+  | | differing pixels |
+  |---|---|
+  | 9 of 10 shots | **0** |
+  | `04-modal-edit-page` | 2,265 px (0.044%), confined to the thumbnail preview image |
+
+  The noise floor for this harness is 752 px (0.015%) — measured by running the *same* code
+  twice — and the diff image shows the difference is a sliver at the top edge of a still-decoding
+  thumbnail, not layout or colour.
+
+### Stage 3 gate
+
+| Check | Result |
+|---|---|
+| `npx next lint` | ✔ No ESLint warnings or errors |
+| `node --test lib/*.test.mjs` | **21 pass, 0 fail** (13 + 8 new slug tests) |
+| `npm run build` | ✔ compiled first attempt, all 26 routes listed |
+| `node scripts/normalize-order.mjs` | 0 corrections |
+| First-load JS | `/[usernameTag]` 210 kB (unchanged), `/[usernameTag]/[pageSlug]` 219 → **214 kB** — deduplicating the colour, sanitiser and slug copies took 5 kB out of the page route on its own |
+
+Stage 3 checks from `STAGES.md`:
+
+- ✔ Screenshots before and after: pixel-identical apart from image-decode noise; the only
+  intended differences are attributes (`role`, `aria-modal`, `aria-label`), which do not render.
+- ✔ Every modal: Tab stays inside, Escape closes, backdrop click closes, focus returns to the
+  trigger.
+- ✔ Slug preview in both page modals and the title editor matches the server's slug across
+  punctuation, non-Latin input, emoji and over-length titles.
 
 ## Discovered, not actioned
 
@@ -406,6 +578,14 @@ removes in Stage 9.
 - **`getUserById` still returns the whole user document** including `passwordHash`. Nothing
   currently passes its result to a client component, so it is not an exposure today; SEC-1
   only hardened `getUserByUsernameTag`, which was the one that leaked.
+- **`PageInfoEditor` renders only `infoText2`.** `infoText1` is written by the meta route and
+  stored on four live pages, but nothing displays it. Either it is a leftover from an earlier
+  two-field layout or the second field was lost in a refactor — worth a product decision, not a
+  code fix. Not in any item's scope.
+- **The dashboard info editor's read-only branch is unreachable in the current data.** It only
+  renders when the viewer is not in edit mode *and* `dashboard.infoText` has visible content,
+  and no account has any. Noted because it means that code path is untested by any browser
+  check in this run.
 
 ## Decisions and deviations
 

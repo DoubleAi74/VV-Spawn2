@@ -4,27 +4,10 @@ import { useEffect } from "react";
 import { useParams } from "next/navigation";
 import ImageWithLoader from "@/components/ImageWithLoader";
 import { getDashboardSnapshot } from "@/lib/routeTransitionCache";
+import { normalizeHex, lighten } from "@/lib/colour";
 
-function normalizeHex(hex, fallback) {
-  const value = String(hex || "").trim();
-  if (/^#[0-9a-fA-F]{6}$/.test(value)) return value;
-  if (/^[0-9a-fA-F]{6}$/.test(value)) return `#${value}`;
-  return fallback;
-}
-
-function lighten(hex, amount = 30) {
-  const safeHex = normalizeHex(hex, "#2d3e50").replace("#", "");
-  let r = parseInt(safeHex.substring(0, 2), 16);
-  let g = parseInt(safeHex.substring(2, 4), 16);
-  let b = parseInt(safeHex.substring(4, 6), 16);
-
-  r = Math.max(0, Math.min(255, r + amount));
-  g = Math.max(0, Math.min(255, g + amount));
-  b = Math.max(0, Math.min(255, b + amount));
-
-  const toHex = (v) => v.toString(16).padStart(2, "0");
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-}
+// What the local copy of lighten() fell back to before FND-2.
+const LOADING_FALLBACK_HEX = "#2d3e50";
 
 function DashboardLoadingCard({ page }) {
   const title = page?.title || "";
@@ -109,7 +92,7 @@ export default function DashboardLoading() {
             {snapshot?.usernameTitle ? (
               <h1
                 className="text-2xl sm:text-4xl font-extrabold tracking-tight truncate"
-                style={{ color: lighten(dashHex, 245) }}
+                style={{ color: lighten(dashHex, 245, LOADING_FALLBACK_HEX) }}
               >
                 {snapshot.usernameTitle}
               </h1>
@@ -121,7 +104,7 @@ export default function DashboardLoading() {
         <div className="w-full pb-[5px]" style={{ backgroundColor: dashHex }}>
           <div
             className="h-[8px] w-full border-t border-black/15"
-            style={{ backgroundColor: lighten(dashHex, 30) }}
+            style={{ backgroundColor: lighten(dashHex, 30, LOADING_FALLBACK_HEX) }}
           />
         </div>
       </header>

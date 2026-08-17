@@ -18,7 +18,7 @@ import CreatePostModal from "@/components/page/CreatePostModal";
 import EditPostModal from "@/components/page/EditPostModal";
 import BulkUploadModal from "@/components/page/BulkUploadModal";
 import PhotoShowModal from "@/components/page/PhotoShowModal";
-import { lighten, hexToRgba } from "@/components/dashboard/DashHeader";
+import { lighten, hexToRgba } from "@/lib/colour";
 
 function hasVisiblePageInfo(value) {
   return Boolean(value && value !== "<p><br></p>" && value.trim() !== "");

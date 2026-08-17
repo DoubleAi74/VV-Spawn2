@@ -1,15 +1,9 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { normalizeHex } from '@/lib/colour';
 
 const ThemeContext = createContext(null);
-
-function normalizeHex(hex, fallback) {
-  const value = String(hex || '').trim();
-  if (/^#[0-9a-fA-F]{6}$/.test(value)) return value;
-  if (/^[0-9a-fA-F]{6}$/.test(value)) return `#${value}`;
-  return fallback;
-}
 
 export function ThemeProvider({ children, initialDashHex, initialBackHex, storageKey }) {
   const [dashHex, setDashHexState] = useState(initialDashHex || '#2d3e50');

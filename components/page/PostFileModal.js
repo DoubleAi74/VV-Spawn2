@@ -2,13 +2,7 @@
 
 import { useEffect } from 'react';
 import { X, ExternalLink, Download } from 'lucide-react';
-import sanitizeHtml from 'sanitize-html';
-
-const SANITIZE_OPTIONS = {
-  allowedTags: ['b', 'i', 'em', 'strong', 'a', 'p', 'br', 'ul', 'ol', 'li'],
-  allowedAttributes: { a: ['href', 'target', 'rel'] },
-  allowedSchemes: ['http', 'https', 'mailto'],
-};
+import { sanitizeRichText } from '@/lib/sanitize';
 
 export default function PostFileModal({ post, onClose }) {
   useEffect(() => {
@@ -50,7 +44,7 @@ export default function PostFileModal({ post, onClose }) {
           <div
             className="quill-output mb-4 text-sm"
             dangerouslySetInnerHTML={{
-              __html: sanitizeHtml(post.description, SANITIZE_OPTIONS),
+              __html: sanitizeRichText(post.description),
             }}
           />
         )}
