@@ -159,7 +159,8 @@ export default function EditPostModal({ post, page, itemCount, onClose, onSave }
       body: JSON.stringify({
         filename: compressed.name,
         contentType,
-        folder: `users/pages/${page._id}/posts`,
+        kind: 'photo',
+        pageId: page._id,
         fileSize: compressed.size,
       }),
     });
@@ -181,7 +182,8 @@ export default function EditPostModal({ post, page, itemCount, onClose, onSave }
       body: JSON.stringify({
         filename: nextFile.name,
         contentType: nextFile.type || 'application/octet-stream',
-        folder: `users/pages/${page._id}/files`,
+        kind: 'file',
+        pageId: page._id,
         fileSize: nextFile.size,
       }),
     });
@@ -204,7 +206,8 @@ export default function EditPostModal({ post, page, itemCount, onClose, onSave }
       body: JSON.stringify({
         filename: compressed.name,
         contentType,
-        folder: `users/pages/${page._id}/posts`,
+        kind: 'photo',
+        pageId: page._id,
         fileSize: compressed.size,
       }),
     });

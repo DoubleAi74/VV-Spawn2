@@ -77,7 +77,7 @@ export default function CreatePageModal({ onClose, onCreate }) {
         body: JSON.stringify({
           filename: compressed.name,
           contentType,
-          folder: 'pages/thumbnails',
+          kind: 'page-thumbnail',
           fileSize: compressed.size,
         }),
       });

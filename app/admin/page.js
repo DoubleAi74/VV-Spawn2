@@ -1,18 +1,38 @@
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { auth } from '@/lib/auth';
 import { getAdminUserSummaries } from '@/lib/data';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
   title: 'Admin | Volvox Works',
-  description: 'Public admin dashboard for account counts',
+  description: 'Account overview',
+  robots: { index: false, follow: false },
 };
 
 function numberLabel(value, singular, plural) {
   return `${value} ${value === 1 ? singular : plural}`;
 }
 
+// There is no role system, so admin is an explicit allowlist of user ids in
+// ADMIN_USER_IDS (comma-separated). An unset variable locks everyone out,
+// which is the right default for a page that lists every account.
+function isAdmin(session) {
+  const userId = session?.user?.userId;
+  if (!userId) return false;
+  return (process.env.ADMIN_USER_IDS || '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .includes(String(userId));
+}
+
 export default async function AdminPage() {
+  const session = await auth();
+  // notFound() rather than a 403, so the route's existence is not advertised.
+  if (!isAdmin(session)) notFound();
+
   const users = await getAdminUserSummaries();
 
   const totals = users.reduce(
@@ -36,7 +56,7 @@ export default async function AdminPage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <p className="text-[11px] uppercase tracking-[0.28em] text-zinc-500">
-                  Public Admin
+                  Admin
                 </p>
                 <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
                   Volvox account overview

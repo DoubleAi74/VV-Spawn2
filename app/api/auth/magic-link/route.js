@@ -4,6 +4,12 @@ import { connectDB } from '@/lib/db';
 import { buildAuthEmail } from '@/lib/authEmailTemplate';
 import User from '@/lib/models/User';
 import VerificationToken from '@/lib/models/VerificationToken';
+import {
+  RATE_LIMITS,
+  TOO_MANY_REQUESTS_MESSAGE,
+  checkRateLimits,
+  clientIp,
+} from '@/lib/rateLimit';
 import { Resend } from 'resend';
 
 const TOKEN_TTL_MINUTES = 10;
@@ -19,6 +25,18 @@ export async function POST(request) {
   const { email } = body;
   if (!email) {
     return NextResponse.json({ error: 'Email is required' }, { status: 400 });
+  }
+
+  const address = email.toLowerCase().trim();
+  const limited = await checkRateLimits([
+    { action: 'magic-link', identifier: address, ...RATE_LIMITS.authEmailPerAddress },
+    { action: 'magic-link-ip', identifier: clientIp(request), ...RATE_LIMITS.authEmailPerIp },
+  ]);
+  if (!limited.allowed) {
+    return NextResponse.json(
+      { error: TOO_MANY_REQUESTS_MESSAGE },
+      { status: 429, headers: { 'Retry-After': String(limited.retryAfter) } }
+    );
   }
 
   await connectDB();

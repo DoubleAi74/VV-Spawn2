@@ -2,6 +2,7 @@ import { auth } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
 import { updatePost, deletePost } from '@/lib/data';
 import { revalidateDashboardAndPage } from '@/lib/revalidation';
+import { INVALID_POST_URL_MESSAGE, isHttpUrl } from '@/lib/postUrl';
 import Post from '@/lib/models/Post';
 import Page from '@/lib/models/Page';
 import sanitizeHtml from 'sanitize-html';
@@ -39,6 +40,13 @@ export async function PATCH(request, { params }) {
   }
 
   const nextContentType = data.content_type || existingPost.content_type;
+
+  // Only when the content is actually being written — a title-only edit must
+  // not fail because of a value that is already stored.
+  if (nextContentType === 'url' && data.content !== undefined && !isHttpUrl(data.content)) {
+    return NextResponse.json({ error: INVALID_POST_URL_MESSAGE }, { status: 400 });
+  }
+
   const requiresThumbnail = ['photo', 'file', 'url'].includes(nextContentType);
   const fallbackThumbnail =
     existingPost.thumbnail || (nextContentType === 'photo' ? existingPost.content : '');

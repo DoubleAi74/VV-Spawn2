@@ -3,6 +3,7 @@ import { connectDB } from '@/lib/db';
 import { createPost } from '@/lib/data';
 import Page from '@/lib/models/Page';
 import { revalidateDashboardAndPage } from '@/lib/revalidation';
+import { INVALID_POST_URL_MESSAGE, isHttpUrl } from '@/lib/postUrl';
 import sanitizeHtml from 'sanitize-html';
 import { NextResponse } from 'next/server';
 
@@ -31,6 +32,10 @@ export async function POST(request) {
   // Sanitise rich text description
   if (rest.description) {
     rest.description = sanitizeHtml(rest.description, SANITIZE_OPTIONS);
+  }
+
+  if (rest.content_type === 'url' && !isHttpUrl(rest.content)) {
+    return NextResponse.json({ error: INVALID_POST_URL_MESSAGE }, { status: 400 });
   }
 
   const requiresThumbnail = ['photo', 'file', 'url'].includes(rest.content_type);

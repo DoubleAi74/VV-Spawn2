@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { auth } from '@/lib/auth';
-import { getUserByUsernameTag, getPageBySlug, getPostsByPage } from '@/lib/data';
+import { getUserByUsernameTag, getPageBySlug, getPostsByPage, toPublicUser } from '@/lib/data';
 import { ThemeProvider } from '@/context/ThemeContext';
 import PageViewClient from '@/components/page/PageViewClient';
 
@@ -26,7 +26,9 @@ export default async function PageViewPage({ params }) {
 
   const posts = await getPostsByPage(page._id);
 
-  const serialisedUser = JSON.parse(JSON.stringify(user));
+  // Only the public projection of the user crosses the boundary — client props
+  // end up in the page HTML.
+  const publicUser = toPublicUser(user, { isOwner });
   const serialisedPage = JSON.parse(JSON.stringify(page));
   const serialisedPosts = JSON.parse(JSON.stringify(posts));
 
@@ -37,7 +39,7 @@ export default async function PageViewPage({ params }) {
       storageKey={user.usernameTag}
     >
       <PageViewClient
-        user={serialisedUser}
+        user={publicUser}
         page={serialisedPage}
         initialPosts={serialisedPosts}
       />

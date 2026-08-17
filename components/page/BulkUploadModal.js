@@ -137,11 +137,12 @@ export default function BulkUploadModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          kind: "photo",
+          pageId: page._id,
           files: processed.map(({ item, compressed }) => ({
             clientId: item.id,
             filename: compressed.name,
             contentType: compressed.type || "image/jpeg",
-            folder: `users/pages/${page._id}/posts`,
           })),
         }),
       });

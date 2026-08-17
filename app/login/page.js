@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthLoadingCard, AuthShell } from "./AuthChrome";
+import { MIN_PASSWORD_LENGTH, passwordProblem } from "@/lib/password";
 
 const ERROR_MESSAGES = {
   "missing-token": "Magic link is invalid.",
@@ -13,6 +14,9 @@ const ERROR_MESSAGES = {
   "user-not-found": "No account found for this email.",
   CredentialsSignin: "Incorrect email or password.",
 };
+
+const RATE_LIMIT_MESSAGE =
+  "Too many attempts. Please wait a few minutes and try again.";
 
 const inputClassName =
   "block w-full rounded-sm px-4 py-3 bg-zinc-900/50 text-white placeholder:text-zinc-600 ring-1 ring-white/10 outline-none focus:ring-white/40 [&:-webkit-autofill]:shadow-[inset_0_0_0px_1000px_rgb(24,24,27)] [&:-webkit-autofill]:[-webkit-text-fill-color:white] [&:-webkit-autofill]:caret-white";
@@ -109,11 +113,20 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
-    const res = await signIn("credentials", {
-      email: loginEmail,
-      password: loginPassword,
-      redirect: false,
-    });
+    let res;
+    try {
+      res = await signIn("credentials", {
+        email: loginEmail,
+        password: loginPassword,
+        redirect: false,
+      });
+    } catch {
+      // signIn throws when the callback replies with anything other than the
+      // JSON it expects — which is what our 429 looks like from here.
+      setLoading(false);
+      setError(RATE_LIMIT_MESSAGE);
+      return;
+    }
 
     if (res?.error) {
       setLoading(false);
@@ -146,12 +159,20 @@ export default function LoginPage() {
       return;
     }
 
-    setError("Failed to send magic link. Please try again.");
+    const data = await res.json().catch(() => ({}));
+    setError(data.error || "Failed to send magic link. Please try again.");
   }
 
   async function handleSignup(e) {
     e.preventDefault();
     setError("");
+
+    const problem = passwordProblem(signupPassword);
+    if (problem) {
+      setError(problem);
+      return;
+    }
+
     setLoading(true);
 
     const res = await fetch("/api/auth/signup", {
@@ -191,19 +212,33 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
-    await fetch("/api/auth/reset-password", {
+    const res = await fetch("/api/auth/reset-password", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: forgotEmail }),
     });
 
     setLoading(false);
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "Failed to send the reset email. Please try again.");
+      return;
+    }
+
     setForgotSent(true);
   }
 
   async function handleResetPassword(e) {
     e.preventDefault();
     setError("");
+
+    const problem = passwordProblem(resetPassword);
+    if (problem) {
+      setError(problem);
+      return;
+    }
+
     setLoading(true);
 
     const res = await fetch("/api/auth/reset-password", {
@@ -273,8 +308,9 @@ export default function LoginPage() {
             value={resetPassword}
             onChange={(e) => setResetPassword(e.target.value)}
             required
+            minLength={MIN_PASSWORD_LENGTH}
             autoComplete="new-password"
-            placeholder="New password"
+            placeholder={`New password (at least ${MIN_PASSWORD_LENGTH} characters)`}
             className={inputClassName}
           />
 
@@ -499,8 +535,9 @@ export default function LoginPage() {
             value={signupPassword}
             onChange={(e) => setSignupPassword(e.target.value)}
             required
+            minLength={MIN_PASSWORD_LENGTH}
             autoComplete="new-password"
-            placeholder="Password"
+            placeholder={`Password (at least ${MIN_PASSWORD_LENGTH} characters)`}
             className={inputClassName}
           />
 

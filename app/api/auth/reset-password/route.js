@@ -5,6 +5,13 @@ import { connectDB } from '@/lib/db';
 import User from '@/lib/models/User';
 import PasswordResetToken from '@/lib/models/PasswordResetToken';
 import { buildAuthEmail } from '@/lib/authEmailTemplate';
+import { BCRYPT_COST, passwordProblem } from '@/lib/password';
+import {
+  RATE_LIMITS,
+  TOO_MANY_REQUESTS_MESSAGE,
+  checkRateLimits,
+  clientIp,
+} from '@/lib/rateLimit';
 import { Resend } from 'resend';
 
 const TOKEN_TTL_MINUTES = 60;
@@ -21,6 +28,18 @@ export async function POST(request) {
   const { email } = body;
   if (!email) {
     return NextResponse.json({ error: 'Email is required' }, { status: 400 });
+  }
+
+  const address = email.toLowerCase().trim();
+  const limited = await checkRateLimits([
+    { action: 'reset-request', identifier: address, ...RATE_LIMITS.authEmailPerAddress },
+    { action: 'reset-request-ip', identifier: clientIp(request), ...RATE_LIMITS.authEmailPerIp },
+  ]);
+  if (!limited.allowed) {
+    return NextResponse.json(
+      { error: TOO_MANY_REQUESTS_MESSAGE },
+      { status: 429, headers: { 'Retry-After': String(limited.retryAfter) } }
+    );
   }
 
   await connectDB();
@@ -85,6 +104,27 @@ export async function PATCH(request) {
     return NextResponse.json({ error: 'Token and password are required' }, { status: 400 });
   }
 
+  const problem = passwordProblem(password);
+  if (problem) {
+    return NextResponse.json({ error: problem }, { status: 400 });
+  }
+
+  // Also throttled: the token is the only thing standing between a caller and
+  // someone else's account.
+  const limited = await checkRateLimits([
+    {
+      action: 'reset-confirm-ip',
+      identifier: clientIp(request),
+      ...RATE_LIMITS.passwordResetConfirmPerIp,
+    },
+  ]);
+  if (!limited.allowed) {
+    return NextResponse.json(
+      { error: TOO_MANY_REQUESTS_MESSAGE },
+      { status: 429, headers: { 'Retry-After': String(limited.retryAfter) } }
+    );
+  }
+
   await connectDB();
 
   const record = await PasswordResetToken.findOne({ token, used: false }).lean();
@@ -98,7 +138,7 @@ export async function PATCH(request) {
     return NextResponse.json({ error: 'Reset link has expired' }, { status: 400 });
   }
 
-  const passwordHash = await bcrypt.hash(password, 12);
+  const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
 
   await User.findOneAndUpdate(
     { email: record.email },

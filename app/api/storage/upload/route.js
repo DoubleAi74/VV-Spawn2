@@ -1,5 +1,6 @@
 import { auth } from '@/lib/auth';
 import { r2Client, R2_BUCKET_NAME, R2_DOMAIN } from '@/lib/r2';
+import { buildObjectKey, isAllowedContentType, resolveUploadPrefix } from '@/lib/uploadKeys';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { NextResponse } from 'next/server';
@@ -19,9 +20,9 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
 
-  const { filename, contentType, folder, fileSize } = body;
+  const { filename, contentType, kind, pageId, fileSize } = body;
 
-  if (!filename || !contentType || !folder) {
+  if (!filename || !contentType || !kind) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
@@ -32,8 +33,22 @@ export async function POST(request) {
     );
   }
 
-  const sanitisedFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const key = `${folder}/${Date.now()}-${sanitisedFilename}`;
+  if (!isAllowedContentType(kind, contentType)) {
+    return NextResponse.json({ error: 'Unsupported file type' }, { status: 400 });
+  }
+
+  // The prefix comes from the session and a page we have verified belongs to
+  // the caller — never from the request body.
+  const target = await resolveUploadPrefix({
+    userId: session.user.userId,
+    kind,
+    pageId,
+  });
+  if (target.error) {
+    return NextResponse.json({ error: target.error }, { status: target.status });
+  }
+
+  const key = buildObjectKey(target.prefix, filename);
 
   const command = new PutObjectCommand({
     Bucket: R2_BUCKET_NAME,

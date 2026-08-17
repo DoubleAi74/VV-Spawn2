@@ -91,7 +91,7 @@ export default function EditPageModal({ page, itemCount, onClose, onSave }) {
           body: JSON.stringify({
             filename: compressed.name,
             contentType,
-            folder: 'pages/thumbnails',
+            kind: 'page-thumbnail',
             fileSize: compressed.size,
           }),
         });

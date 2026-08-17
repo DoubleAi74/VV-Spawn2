@@ -1,5 +1,6 @@
 import { auth } from '@/lib/auth';
 import { r2Client, R2_BUCKET_NAME, R2_DOMAIN } from '@/lib/r2';
+import { buildObjectKey, isAllowedContentType, resolveUploadPrefix } from '@/lib/uploadKeys';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { NextResponse } from 'next/server';
@@ -19,7 +20,7 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
 
-  const { files } = body;
+  const { files, kind = 'photo', pageId } = body;
 
   if (!Array.isArray(files) || files.length === 0) {
     return NextResponse.json({ error: 'files array is required' }, { status: 400 });
@@ -32,10 +33,24 @@ export async function POST(request) {
     );
   }
 
+  // One kind and one page for the whole batch, verified once.
+  const target = await resolveUploadPrefix({
+    userId: session.user.userId,
+    kind,
+    pageId,
+  });
+  if (target.error) {
+    return NextResponse.json({ error: target.error }, { status: target.status });
+  }
+
+  const rejected = files.find((file) => !isAllowedContentType(kind, file?.contentType));
+  if (rejected) {
+    return NextResponse.json({ error: 'Unsupported file type' }, { status: 400 });
+  }
+
   const urls = await Promise.all(
-    files.map(async ({ filename, contentType, folder, clientId }) => {
-      const sanitisedFilename = (filename || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
-      const key = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}-${sanitisedFilename}`;
+    files.map(async ({ filename, contentType, clientId }) => {
+      const key = buildObjectKey(target.prefix, filename);
 
       const command = new PutObjectCommand({
         Bucket: R2_BUCKET_NAME,

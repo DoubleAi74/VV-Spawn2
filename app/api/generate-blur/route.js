@@ -2,17 +2,34 @@
  * POST /api/generate-blur
  * Server-side fallback for generating a blur placeholder from an image URL.
  * Uses Cloudflare CDN image transforms to produce a small, blurred JPEG.
- * Retries up to 5 times with increasing delays to handle CDN propagation lag.
- * Auth not required — called server-side only.
+ * Retries a few times to handle CDN propagation lag after an upload.
+ *
+ * Requires a session, and the URL must be one of our own R2 objects: this is a
+ * server-side fetch of a caller-supplied address, so without both checks it is
+ * a read primitive against anything the server can reach.
  */
 import { NextResponse } from 'next/server';
+import { auth } from '@/lib/auth';
 
 const R2_DOMAIN = process.env.NEXT_PUBLIC_R2_DOMAIN;
-const MAX_RETRIES = 5;
+const MAX_RETRIES = 3;
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function isOwnStorageUrl(imageUrl) {
+  try {
+    return new URL(imageUrl).origin === new URL(R2_DOMAIN).origin;
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(request) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
+  }
+
   let body;
   try {
     body = await request.json();
@@ -25,13 +42,11 @@ export async function POST(request) {
     return NextResponse.json({ error: 'imageUrl is required' }, { status: 400 });
   }
 
-  let path;
-  try {
-    path = new URL(imageUrl).pathname;
-  } catch {
+  if (!isOwnStorageUrl(imageUrl)) {
     return NextResponse.json({ error: 'Invalid imageUrl' }, { status: 400 });
   }
 
+  const path = new URL(imageUrl).pathname;
   const blurUrl = `${R2_DOMAIN}/cdn-cgi/image/width=200,quality=60,blur=2,format=jpeg${path}`;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -50,21 +65,13 @@ export async function POST(request) {
     }
 
     if (attempt < MAX_RETRIES) {
-      await delay(attempt * 1000);
+      await delay(attempt * 500);
     }
   }
 
-  // All retries exhausted — fall back to raw image bytes
-  console.error('generate-blur: all CDN attempts failed, falling back to raw encode');
-  try {
-    const response = await fetch(imageUrl);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const buffer = await response.arrayBuffer();
-    const contentType = response.headers.get('content-type') || 'image/jpeg';
-    const base64 = Buffer.from(buffer).toString('base64');
-    return NextResponse.json({ blurDataURL: `data:${contentType};base64,${base64}` });
-  } catch (err) {
-    console.error('generate-blur: raw fallback also failed:', err);
-    return NextResponse.json({ error: 'Failed to generate blur' }, { status: 500 });
-  }
+  // No raw-image fallback: it returned the whole original base64-encoded, which
+  // is neither a blur nor a sensible payload. A missing placeholder is handled
+  // by every call site.
+  console.error('generate-blur: all CDN attempts failed');
+  return NextResponse.json({ error: 'Failed to generate blur' }, { status: 502 });
 }
