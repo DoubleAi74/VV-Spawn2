@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { getUserByUsernameTag, getPageBySlug, getPostsByPage, toPublicUser } from '@/lib/data';
+import { sanitizeRichText } from '@/lib/sanitize';
 import { ThemeProvider } from '@/context/ThemeContext';
 import PageViewClient from '@/components/page/PageViewClient';
 
@@ -30,6 +31,13 @@ export default async function PageViewPage({ params }) {
   // end up in the page HTML.
   const publicUser = toPublicUser(user, { isOwner });
   const serialisedPage = JSON.parse(JSON.stringify(page));
+  // See toPublicUser: rich text is cleaned on the server so the browser never
+  // has to load a sanitiser to display it.
+  serialisedPage.pageMetaData = {
+    ...serialisedPage.pageMetaData,
+    infoText1: sanitizeRichText(serialisedPage.pageMetaData?.infoText1 || ''),
+    infoText2: sanitizeRichText(serialisedPage.pageMetaData?.infoText2 || ''),
+  };
   const serialisedPosts = JSON.parse(JSON.stringify(posts));
 
   return (

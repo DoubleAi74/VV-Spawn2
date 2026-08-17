@@ -1,12 +1,48 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { LogOut, Edit2, Eye } from "lucide-react";
 import { signOut } from "next-auth/react";
 import TitleEdit, { TitleEditPanel } from "@/components/dashboard/TitleEdit";
 import { useTheme } from "@/context/ThemeContext";
+import { useToast } from "@/context/ToastContext";
 import { lighten } from "@/lib/colour";
+
+// Long enough that a continuous drag of the native picker never reaches it —
+// the write happens when the drag stops, or immediately on `change` when the
+// picker is dismissed. It used to be 280ms, which meant a stream of PATCHes,
+// each one running updateUserColours and then revalidating every page the user
+// owns.
+const COLOUR_COMMIT_DELAY = 800;
+
+/**
+ * A native colour input fires `input` continuously while the picker is dragged
+ * and `change` once when it is committed. React's onChange is the former, so
+ * the commit is subscribed to directly.
+ */
+function ColourInput({ value, onInput, onCommit, className, label }) {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const handleCommit = () => onCommit();
+    el.addEventListener("change", handleCommit);
+    return () => el.removeEventListener("change", handleCommit);
+  }, [onCommit]);
+
+  return (
+    <input
+      ref={ref}
+      type="color"
+      className={className}
+      value={value}
+      onChange={(e) => onInput(e.target.value)}
+      aria-label={label}
+    />
+  );
+}
 
 export default function DashHeader({
   usernameTitle,
@@ -19,26 +55,54 @@ export default function DashHeader({
   onTitleSave,
 }) {
   const { dashHex, backHex, setDashHex, setBackHex } = useTheme();
+  const { showError } = useToast();
   const persistTimerRef = useRef(null);
+  const pendingColoursRef = useRef(null);
   const [titleEditing, setTitleEditing] = useState(false);
 
-  useEffect(
-    () => () => {
-      if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+  const persist = useCallback(
+    async ({ dashHex: nextDash, backHex: nextBack }) => {
+      try {
+        const res = await fetch("/api/user/colours", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dashHex: nextDash, backHex: nextBack }),
+        });
+        // This was a bare `await fetch(...)` with no status check and no error
+        // path — the last mutation in the app that could fail in silence.
+        if (!res.ok) throw new Error(`Colour save failed: ${res.status}`);
+      } catch {
+        showError(
+          "Couldn't save your colours",
+          "They still look right here, but the change was not saved. Try again.",
+        );
+      }
     },
-    [],
+    [showError],
   );
 
-  function queuePersist(nextDash, nextBack) {
-    if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
-    persistTimerRef.current = setTimeout(async () => {
-      await fetch("/api/user/colours", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dashHex: nextDash, backHex: nextBack }),
-      }).catch(() => {});
-    }, 280);
-  }
+  const flushColours = useCallback(() => {
+    if (persistTimerRef.current) {
+      clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = null;
+    }
+    const pending = pendingColoursRef.current;
+    if (!pending) return;
+    pendingColoursRef.current = null;
+    void persist(pending);
+  }, [persist]);
+
+  // A pending change must not be lost by navigating away mid-drag.
+  useEffect(() => () => flushColours(), [flushColours]);
+
+  const queuePersist = useCallback(
+    (nextDash, nextBack) => {
+      pendingColoursRef.current = { dashHex: nextDash, backHex: nextBack };
+      if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = setTimeout(flushColours, COLOUR_COMMIT_DELAY);
+    },
+    [flushColours],
+  );
 
   function handleDashChange(next) {
     setDashHex(next);
@@ -72,19 +136,19 @@ export default function DashHeader({
 
             {isOwner && isEditMode && (
               <div className="hidden sm:flex shrink-0 pt-[10px] pb-[6px] px-1 sm:px-3 gap-2">
-                <input
-                  type="color"
+                <ColourInput
                   className="h-8 w-9 cursor-pointer rounded-[3px] border border-white/50 bg-white/10 px-[2px] shadow"
                   value={backHex}
-                  onChange={(e) => handleBackChange(e.target.value)}
-                  aria-label="Background colour"
+                  onInput={handleBackChange}
+                  onCommit={flushColours}
+                  label="Background colour"
                 />
-                <input
-                  type="color"
+                <ColourInput
                   className="h-8 w-9 cursor-pointer rounded-[3px] border border-white/50 bg-white/10 px-[2px] shadow"
                   value={dashHex}
-                  onChange={(e) => handleDashChange(e.target.value)}
-                  aria-label="Header colour"
+                  onInput={handleDashChange}
+                  onCommit={flushColours}
+                  label="Header colour"
                 />
               </div>
             )}
@@ -106,19 +170,19 @@ export default function DashHeader({
                 </span>
                 {isEditMode && (
                   <div className="flex sm:hidden gap-2">
-                    <input
-                      type="color"
+                    <ColourInput
                       className="h-8 w-8 cursor-pointer rounded-[3px] border border-white/50 bg-white/10 px-[2px] shadow"
                       value={backHex}
-                      onChange={(e) => handleBackChange(e.target.value)}
-                      aria-label="Background colour"
+                      onInput={handleBackChange}
+                      onCommit={flushColours}
+                      label="Background colour"
                     />
-                    <input
-                      type="color"
+                    <ColourInput
                       className="h-8 w-8 cursor-pointer rounded-[3px] border border-white/50 bg-white/10 px-[2px] shadow"
                       value={dashHex}
-                      onChange={(e) => handleDashChange(e.target.value)}
-                      aria-label="Header colour"
+                      onInput={handleDashChange}
+                      onCommit={flushColours}
+                      label="Header colour"
                     />
                   </div>
                 )}

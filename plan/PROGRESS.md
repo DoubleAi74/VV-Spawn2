@@ -558,6 +558,172 @@ Stage 3 checks from `STAGES.md`:
 - ✔ Slug preview in both page modals and the title editor matches the server's slug across
   punctuation, non-Latin input, emoji and over-length titles.
 
+## Stage 4 — Cut the weight
+
+- [x] **PERF-1 — image width buckets.** `lib/cloudflareLoader.js` now emits `width=` in the
+  `cdn-cgi/image` path and exports `CARD_IMAGE_WIDTH`, `FULL_IMAGE_WIDTH`, `withImageBucket`
+  and `buildImageUrl`. The bucket is chosen by the **call site**, not by the browser: it rides
+  on the src as a `?w=` parameter, because `next/image` builds its own `srcset` from the
+  device sizes and would otherwise pull in a third and fourth transform per image. Cards get
+  the card bucket on every device; the lightbox asks for 1600 and layers the card's
+  already-cached image underneath it.
+
+  **The card bucket is 960, not the 640 the plan named — a product decision, taken with the
+  run owner.** Cards are `object-cover` 4:3 crops, so a 16:9 source is cropped *and* scaled up:
+  a 330 CSS-px card on a 2× display needs about 835px of source width. 640 is right for a
+  phone and visibly soft on a retina desktop — small text inside a thumbnail stopped being
+  legible. Measured on the real images:
+
+  | card bucket | dashboard, mobile | page, mobile | desktop @2× |
+  |---|---|---|---|
+  | none (before) | 757.0 kB / 6 images | 530.4 kB / 8 images | reference |
+  | 640 (as planned) | 165.5 kB (**−78%**) | 126.9 kB (−76%) | **visibly soft** |
+  | **960 (shipped)** | **309.2 kB (−59%)** | **211.7 kB (−60%)** | no visible change |
+
+  Verified in the browser: every card image requests `width=960`; the whole session produces
+  exactly **two** distinct transforms, 960 and 1600; opening the lightbox issues **one** new
+  request (the 1600) and re-requests nothing at 960, so the layer underneath comes from cache;
+  at +120ms the lightbox already has the blur and the 960 painted at opacity 1 while the 1600
+  is still pending — **no blank frame** — and at +4s the 1600 is loaded and visible.
+  Pixel comparison against the pre-PERF-1 screenshots: 0.02–0.23% of pixels, all inside image
+  content (at 640 it was 0.30–0.75%).
+
+- [x] **PERF-2 — priority on the first row.** `priority={idx < 4}` from both grid loops, and
+  from both `loading.js` skeleton grids too — they render the same URLs, and a lazy skeleton
+  fetch competing with a prioritised real one is the wrong way round.
+
+  `priority` alone was **not enough** in this Next version. In the App Router it only triggers
+  a `ReactDOM.preload`, and that preload carries `fetchpriority` only if the caller passed
+  `fetchPriority` explicitly — so the first row was preloaded but unprioritised, and the `<img>`
+  had no hint at all. `ImageWithLoader` now passes `fetchPriority: 'high'` alongside `priority`.
+  Verified in the DOM: on both routes the first four `<img>` carry `fetchpriority="high"` and
+  no `loading="lazy"`, exactly four `<link rel="preload" as="image" fetchpriority="high">`
+  appear, and every image after the fourth is still `loading="lazy"`.
+
+- [x] **PERF-3 — gate the theme poll.** `ThemeContext` gained a `syncEnabled` switch and a
+  `useThemeSync(enabled)` hook; both view clients call `useThemeSync(isOwner && isEditMode)`.
+  The provider sits *above* the component that owns edit mode, so the consumer has to tell it
+  — the poll cannot work this out for itself. The endpoint now uses a new `getUserTheme(tag)`
+  that projects `{ 'dashboard.dashHex', 'dashboard.backHex' }` instead of fetching the whole
+  user document for two hex strings, and answers with
+  `Cache-Control: public, max-age=10, stale-while-revalidate=30`.
+
+  | | before | after |
+  |---|---|---|
+  | anonymous visitor, idle 60s | **6** `/api/theme` requests | **0** |
+  | owner in view mode, idle 60s | 5 | **0** |
+  | owner in **edit mode**, idle 35s | 3 | **3** (unchanged — this is the case the poll is for) |
+  | leaving edit mode, idle 30s | — | **0** |
+
+  The "before" figures were taken by temporarily reverting `useThemeSync` to a no-op and the
+  default to `true`, i.e. by running the old behaviour, not by reading the old code. Also
+  verified: the endpoint still returns both hexes and **only** those two keys, and a colour
+  change in one tab still reaches a second tab (`rgb(67, 10, 10)` → `rgb(18, 52, 86)`) through
+  the existing `storage` listener, with no polling involved and no database write (the PATCH
+  was intercepted).
+
+- [x] **PERF-4 — the colour picker writes on commit, and says so when it fails.** `DashHeader`
+  now debounces at **800ms** and flushes immediately on the input's native `change` event —
+  a `ColourInput` subscribes to it directly, because React's `onChange` for a colour input is
+  the `input` event and never the commit. A pending write is also flushed on unmount so
+  navigating away mid-drag cannot lose it.
+
+  | | before (280ms) | after (800ms + commit) |
+  |---|---|---|
+  | `PATCH /api/user/colours` from a 5s drag | **9** | **1** |
+
+  The drag is simulated the way a hand actually moves — bursts of `input` events ~40ms apart
+  with a ~350ms pause between bursts — because a metronome-steady stream never reaches *either*
+  debounce and would have flattered the old code. Both numbers come from the same simulation,
+  the "before" one measured against the previous commit's `DashHeader`. No request reached the
+  database in either run: they were fulfilled at the network layer, and the stored colours are
+  byte-identical afterwards.
+
+  The failure path: `queuePersist` was a bare `await fetch(...).catch(() => {})` — the last
+  silent mutation in the app. It now checks `res.ok` and reports through the REL-2 toast:
+  *"Couldn't save your colours — They still look right here, but the change was not saved. Try
+  again."* Verified with the endpoint forced to 500: the toast renders on screen (420×82 at
+  510,794 in a 1440×900 viewport, screenshot `perf4-toast.png`), and the header and the picker
+  both keep the colour the user chose, which is what the message claims.
+
+  **A real race found while verifying this, and fixed.** `syncFromServer` checked the
+  local-edit hold *before* its fetch but not after. In dev the request takes the best part of a
+  second, so picking a colour while one was in flight meant the server's answer landed
+  afterwards and silently discarded the pick — the header snapped back within 250ms of the
+  click. PERF-3 made this easier to hit, because the poll now starts at the moment you enter
+  edit mode, which is the moment you reach for the picker. The hold is now re-checked after the
+  response arrives. Before the fix the colour reverted in 250ms; after it, it holds for the
+  full 6s the test watches. This was only visible because the check asserted on the rendered
+  colour rather than on the request count.
+
+- [x] **PERF-5 — `sanitize-html` out of the client bundle.** Both info editors rendered
+  `sanitizeRichText(value)` on every render, which pulled the whole library into the critical
+  path of every public page view to re-check content the route had already cleaned on write.
+
+  The plan's first option — "trust write-time sanitisation" — is not safe here on its own:
+  **four live pages still hold `<div style="…">` in `pageMetaData`**, written before the route
+  sanitised, and display-time sanitisation is currently the only thing stripping them.
+  So the plan's second option shipped instead: the **server** cleans on the way out.
+  `toPublicUser` sanitises `dashboard.infoText`, and the page server component sanitises
+  `pageMetaData.infoText1/2` where the client props are built. The editors render the string
+  directly.
+
+  The remaining gap was that the editor's local `value` after typing is not what the server
+  stores. Both save routes now return the cleaned text and both editors adopt it — but only if
+  nothing has been typed since the request went out, so the adoption cannot clobber later
+  keystrokes.
+
+  | | before | after |
+  |---|---|---|
+  | first-load JS, `/[usernameTag]` | 210 kB | **136 kB** (Stage 0 baseline: 208 kB) |
+  | first-load JS, `/[usernameTag]/[pageSlug]` | 214 kB | **140 kB** (Stage 0 baseline: 218 kB) |
+  | `sanitize-html` in `.next/static/chunks` | present | **absent** |
+
+  The bundle check greps all 16 client chunks for five `sanitize-html` fingerprints
+  (`allowedSchemes`, `nonTextTags`, `sanitize-html`, `allowedIframeHostnames`, `srcHandling`) —
+  **0 chunks each** — with a control string from the app's own code ("Couldn't save your
+  colours") found in a chunk, so the search is known to work.
+
+  Verified in the running app on a scratch page: a deliberately legacy row written straight to
+  the database as `<div style="color:red">legacy <b>markup</b></div><script>alert(1)</script><p>tail</p>`
+  renders as `legacy <b>markup</b><p>tail</p>` — the script tag and the inline style are gone
+  even though nothing in the browser sanitises any more. Typing
+  `<p>kept</p><div style="color:red">stripped</div>` into the editor leaves the textarea, the
+  status line and the database all reading exactly `<p>kept</p>stripped`. The rich-text
+  rendering check from FND-1 still matches the old sanitiser byte for byte (512 characters).
+
+### Stage 4 measurements
+
+| Metric | Before | After |
+|---|---|---|
+| Dashboard image transfer, mobile viewport (390×844 @3×) | 757.0 kB / 6 requests | **309.2 kB** (−59%) |
+| Page image transfer, mobile viewport | 530.4 kB / 8 requests | **211.7 kB** (−60%) |
+| First-load JS, `/[usernameTag]` | 210 kB (Stage 0: 208 kB) | **136 kB** (−35%) |
+| First-load JS, `/[usernameTag]/[pageSlug]` | 214 kB (Stage 0: 218 kB) | **140 kB** (−36%) |
+| `/api/theme` requests in 60s on an idle page (anonymous) | 6 | **0** |
+| `/api/theme` requests in 60s on an idle page (owner, view mode) | 5 | **0** |
+| `/api/theme` requests in 35s, owner in edit mode | 3 | 3 (deliberately unchanged) |
+| `PATCH /api/user/colours` from a 5s colour-picker drag | 9 | **1** |
+| Distinct Cloudflare image transforms per image | 1 (the full original) | 2 (960 and 1600) |
+
+### Stage 4 gate
+
+| Check | Result |
+|---|---|
+| `npx next lint` | ✔ No ESLint warnings or errors |
+| `node --test lib/*.test.mjs` | 21 pass, 0 fail |
+| `npm run build` | ✔ compiled first attempt, all 26 routes listed |
+| `node scripts/normalize-order.mjs` | 0 corrections |
+
+Stage 4 checks from `STAGES.md`:
+
+- ✔ Every row of the measurements table improved, measured, not asserted.
+- ✔ The lightbox opens with no blank frame — at +120ms the blur and the cached 960 are painted
+  at opacity 1 while the 1600 is still in flight.
+- ✔ Rich text renders identically (byte-for-byte against the previous sanitiser output).
+- ✔ Nothing visually regressed: the ten-screenshot set differs from Stage 3 by 0–0.23% of
+  pixels, all of it inside image content, none of it in any border, panel, text or colour.
+
 ## Discovered, not actioned
 
 - **`tailwind.config.js` did not scan `context/`** — found via REL-2, fixed there because the
@@ -588,6 +754,17 @@ Stage 3 checks from `STAGES.md`:
   check in this run.
 
 ## Decisions and deviations
+
+- **PERF-1's card bucket is 960, not 640.** `IMPROVEMENTS.md` names 640; measurement showed it
+  is visibly soft on a retina desktop because the cards are `object-cover` 4:3 crops of 16:9
+  sources. Raised with the run owner with both sets of numbers and 960 was chosen. Still two
+  buckets, still fixed, still chosen by the call site — only the number changed. See PERF-1.
+- **PERF-5 sanitises on the server rather than trusting write-time sanitisation alone**, which
+  is the second of the two options `IMPROVEMENTS.md` offers. Four live rows predate the route's
+  sanitiser and display-time cleaning is currently the only thing stripping them.
+- **PERF-2 also sets `fetchPriority: 'high'`**, not just `priority`. In this version of Next
+  `priority` alone yields a preload with no priority hint at all; the item's "Done when" asks
+  for `fetchpriority="high"`, which needs the explicit prop.
 
 - **Committed the inherited working tree first.** The page-ordering fix described in
   `IMPROVEMENTS.md` → "Context: what already happened" was present but uncommitted. It is

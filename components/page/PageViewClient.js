@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Plus, Edit2, Eye, LogOut, ArrowLeft } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useAuth } from "@/context/AuthContext";
-import { useTheme } from "@/context/ThemeContext";
+import { useTheme, useThemeSync } from "@/context/ThemeContext";
 import { mutationFailureDetail, useToast } from "@/context/ToastContext";
 import { mergeServerAndOptimistic } from "@/lib/optimisticMerge";
 import { reorderItemsByIndex, swapItemsByIds } from "@/lib/ordering";
@@ -60,6 +60,9 @@ export default function PageViewClient({ user, page, initialPosts }) {
 
   const isOwner = sessionUser?.usernameTag === user.usernameTag;
   const [isEditMode, setIsEditMode] = useState(false);
+  // The theme poll only has anything to report while its own colours can be
+  // changed, which is the owner in edit mode and nobody else.
+  useThemeSync(isOwner && isEditMode);
   const [posts, setPosts] = useState(initialPosts);
   const [showCreate, setShowCreate] = useState(false);
   const [editingPost, setEditingPost] = useState(null);
@@ -454,6 +457,8 @@ export default function PageViewClient({ user, page, initialPosts }) {
                 onMoveRight={handleMoveRight}
                 isFirst={idx === 0}
                 isLast={idx === posts.length - 1}
+                // See DashboardViewClient: the first row is above the fold.
+                priority={idx < 4}
               />
             ))}
           </div>

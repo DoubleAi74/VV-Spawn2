@@ -1,16 +1,26 @@
 import { NextResponse } from "next/server";
-import { getUserByUsernameTag } from "@/lib/data";
+import { getUserTheme } from "@/lib/data";
 
 export async function GET(request, { params }) {
   const { usernameTag } = await params;
-  const user = await getUserByUsernameTag(usernameTag);
+  const theme = await getUserTheme(usernameTag);
 
-  if (!user) {
+  if (!theme) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  return NextResponse.json({
-    dashHex: user.dashboard?.dashHex || "#2d3e50",
-    backHex: user.dashboard?.backHex || "#e5e7eb",
-  });
+  return NextResponse.json(
+    {
+      dashHex: theme.dashboard?.dashHex || "#2d3e50",
+      backHex: theme.dashboard?.backHex || "#e5e7eb",
+    },
+    {
+      headers: {
+        // Two public hex strings. The owner's own edit-mode poll sends
+        // `no-store` because it needs to see its own writes immediately; this
+        // is for everything else, including any CDN in front of the app.
+        "Cache-Control": "public, max-age=10, stale-while-revalidate=30",
+      },
+    }
+  );
 }

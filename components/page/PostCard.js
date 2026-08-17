@@ -24,6 +24,7 @@ export default function PostCard({
   onMoveRight,
   isFirst,
   isLast,
+  priority = false,
 }) {
   const [deletePrime, setDeletePrime] = useState(false);
   const isOptimistic = Boolean(post._optimistic);
@@ -44,6 +45,7 @@ export default function PostCard({
           alt={post.title || ''}
           blurDataURL={post.blurDataURL}
           fill
+          priority={priority}
           className="object-cover"
         />
       );

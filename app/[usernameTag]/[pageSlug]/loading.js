@@ -10,7 +10,7 @@ import { normalizeHex, lighten, hexToRgba } from "@/lib/colour";
 const LOADING_FALLBACK_HEX = "#2d3e50";
 const LOADING_RGBA_FALLBACK_HEX = "#e5e7eb";
 
-function PostLoadingCard({ post }) {
+function PostLoadingCard({ post, priority = false }) {
   const title = post?.title || "";
   const thumbnail = post?.thumbnail || "";
   const blurDataURL = post?.blurDataURL || "";
@@ -32,6 +32,7 @@ function PostLoadingCard({ post }) {
             alt={title || "Post preview"}
             blurDataURL={blurDataURL}
             fill
+            priority={priority}
             className="object-cover"
           />
         ) : (
@@ -115,6 +116,7 @@ export default function PageViewLoading() {
                 <PostLoadingCard
                   key={post._id || `skeleton-${index}`}
                   post={post}
+                  priority={index < 4}
                 />
               ))}
             </div>

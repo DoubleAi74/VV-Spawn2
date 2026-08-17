@@ -24,6 +24,7 @@ export default function PageCard({
   onMoveDown,
   isFirst,
   isLast,
+  priority = false,
 }) {
   const [deletePrime, setDeletePrime] = useState(false);
   const isOptimistic = Boolean(page._optimistic);
@@ -76,6 +77,7 @@ export default function PageCard({
                 alt={page.title}
                 blurDataURL={page.blurDataURL}
                 fill
+                priority={priority}
                 className="object-cover"
               />
             )}

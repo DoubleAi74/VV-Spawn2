@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { sanitizeRichText } from "@/lib/sanitize";
 import { getInfoPalette } from "@/lib/colour";
 import { useTheme } from "@/context/ThemeContext";
 
@@ -36,9 +35,14 @@ export default function DashboardInfoEditor({
 
     setSaving(true);
     setError("");
+    const sent = value;
     try {
-      await onSave(value);
-      setServerValue(value);
+      const stored = await onSave(sent);
+      // Adopt exactly what the server stored, so the preview cannot drift from
+      // it — but only if nothing has been typed since the request went out.
+      const clean = typeof stored === "string" ? stored : sent;
+      setServerValue(clean);
+      setValue((current) => (current === sent ? clean : current));
     } catch {
       setError("Failed to save. Try again.");
     } finally {
@@ -96,7 +100,10 @@ export default function DashboardInfoEditor({
             <div
               className="dashboard-content"
               dangerouslySetInnerHTML={{
-                __html: sanitizeRichText(value || "\u00A0"),
+                // Already sanitised: on the way in by the route, and on the way
+                // out by toPublicUser. Re-checking it here meant shipping
+                // sanitize-html to every visitor of every page.
+                __html: value || "\u00A0",
               }}
             />
           )}

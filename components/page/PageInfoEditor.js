@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { sanitizeRichText } from "@/lib/sanitize";
 import { getInfoPalette } from "@/lib/colour";
 import { useTheme } from "@/context/ThemeContext";
 
@@ -43,7 +42,9 @@ function HtmlInfoEditor({
             <div
               className="page-content"
               dangerouslySetInnerHTML={{
-                __html: sanitizeRichText(value || "\u00A0"),
+                // Already sanitised: on the way in by the route, and on the way
+                // out by the page server component. See DashboardInfoEditor.
+                __html: value || "\u00A0",
               }}
             />
           )}
@@ -122,6 +123,8 @@ export default function PageInfoEditor({
     if (!pageId || !isEditMode) return;
     if (text1 === serverText1 && text2 === serverText2) return;
 
+    const sent1 = text1;
+    const sent2 = text2;
     setSaving(true);
     setError("");
 
@@ -129,15 +132,22 @@ export default function PageInfoEditor({
       const res = await fetch(`/api/pages/${pageId}/meta`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ infoText1: text1, infoText2: text2 }),
+        body: JSON.stringify({ infoText1: sent1, infoText2: sent2 }),
       });
 
       if (!res.ok) {
         throw new Error("save failed");
       }
 
-      setServerText1(text1);
-      setServerText2(text2);
+      // Adopt exactly what the server stored, so the preview cannot drift from
+      // it — but only if nothing has been typed since the request went out.
+      const stored = await res.json().catch(() => ({}));
+      const clean1 = typeof stored.infoText1 === "string" ? stored.infoText1 : sent1;
+      const clean2 = typeof stored.infoText2 === "string" ? stored.infoText2 : sent2;
+      setServerText1(clean1);
+      setServerText2(clean2);
+      setText1((current) => (current === sent1 ? clean1 : current));
+      setText2((current) => (current === sent2 ? clean2 : current));
     } catch {
       setError("Failed to save. Try again.");
     } finally {

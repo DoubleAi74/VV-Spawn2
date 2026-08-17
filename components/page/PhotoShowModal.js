@@ -10,21 +10,17 @@ import {
   FileText,
 } from "lucide-react";
 import Modal from "@/components/Modal";
+import {
+  CARD_IMAGE_WIDTH,
+  FULL_IMAGE_WIDTH,
+  buildImageUrl,
+} from "@/lib/cloudflareLoader";
 import { buildRenderableRichText } from "@/lib/richText";
 
-const R2_DOMAIN = process.env.NEXT_PUBLIC_R2_DOMAIN;
-
-// Mirrors cloudflareLoader exactly — same URL means browser cache hits when
-// navigating from a post card into the modal.
-function getDisplayUrl(src) {
-  if (!src) return src;
-  try {
-    const path = new URL(src).pathname;
-    return `${R2_DOMAIN}/cdn-cgi/image/quality=75,format=webp${path}`;
-  } catch {
-    return src;
-  }
-}
+// The card's image is already in the browser cache, so it paints immediately
+// and the full one fades in over it. Same layering the blur placeholder used.
+const cardUrl = (src) => (src ? buildImageUrl(src, CARD_IMAGE_WIDTH) : src);
+const fullUrl = (src) => (src ? buildImageUrl(src, FULL_IMAGE_WIDTH) : src);
 
 export default function PhotoShowModal({
   post,
@@ -311,7 +307,7 @@ export default function PhotoShowModal({
             {thumbUrl && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={getDisplayUrl(thumbUrl)}
+                src={cardUrl(thumbUrl)}
                 alt=""
                 aria-hidden
                 onLoad={() => setThumbnailLoaded(true)}
@@ -324,7 +320,7 @@ export default function PhotoShowModal({
             {displayImageUrl && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={getDisplayUrl(displayImageUrl)}
+                src={fullUrl(displayImageUrl)}
                 alt={post.title || ""}
                 onLoad={() => setIsLoaded(true)}
                 className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-300 ease-out ${

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
+import { CARD_IMAGE_WIDTH, withImageBucket } from '@/lib/cloudflareLoader';
 
 const loadedSrcCache = new Set();
 const MAX_LOADED_SRC_CACHE = 800;
@@ -36,8 +37,12 @@ export default function ImageWithLoader({
   style = {},
   priority = false,
   useNextBlurPlaceholder = false,
+  bucket = CARD_IMAGE_WIDTH,
 }) {
-  const srcKey = makeSrcKey(src);
+  // Every consumer of this component renders a grid card, so the card bucket is
+  // the default; the lightbox builds its own URLs and does not come through here.
+  const bucketedSrc = withImageBucket(src, bucket);
+  const srcKey = makeSrcKey(bucketedSrc);
   const [isLoading, setIsLoading] = useState(() => (srcKey ? !loadedSrcCache.has(srcKey) : false));
   const [shouldAnimateReveal, setShouldAnimateReveal] = useState(() =>
     Boolean(srcKey) && !loadedSrcCache.has(srcKey)
@@ -73,8 +78,11 @@ export default function ImageWithLoader({
     : '';
 
   const imageProps = {
-    src,
+    src: bucketedSrc,
     priority,
+    // `priority` alone only makes next/image emit a ReactDOM.preload; the
+    // fetchpriority hint on both the <img> and that preload comes from this.
+    ...(priority ? { fetchPriority: 'high' } : {}),
     onLoadingComplete: handleLoadingComplete,
     onError: handleError,
     style,

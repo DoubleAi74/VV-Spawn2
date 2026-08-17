@@ -9,7 +9,7 @@ import { normalizeHex, lighten } from "@/lib/colour";
 // What the local copy of lighten() fell back to before FND-2.
 const LOADING_FALLBACK_HEX = "#2d3e50";
 
-function DashboardLoadingCard({ page }) {
+function DashboardLoadingCard({ page, priority = false }) {
   const title = page?.title || "";
   const thumbnail = page?.thumbnail || "";
   const blurDataURL = page?.blurDataURL || "";
@@ -31,6 +31,7 @@ function DashboardLoadingCard({ page }) {
             alt={title || "Page preview"}
             blurDataURL={blurDataURL}
             fill
+            priority={priority}
             className="object-cover"
           />
         ) : (
@@ -116,6 +117,7 @@ export default function DashboardLoading() {
               <DashboardLoadingCard
                 key={page._id || `skeleton-${index}`}
                 page={page}
+                priority={index < 4}
               />
             ))}
           </div>

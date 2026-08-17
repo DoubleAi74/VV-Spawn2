@@ -12,5 +12,6 @@ export async function PATCH(request) {
   const { infoText } = await request.json();
   const clean = sanitizeRichText(infoText || '');
   await updateUserDashboard(session.user.userId, clean);
-  return NextResponse.json({ success: true });
+  // The editor adopts this, so what it shows is exactly what was stored.
+  return NextResponse.json({ success: true, infoText: clean });
 }

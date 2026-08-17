@@ -8,6 +8,12 @@ const ThemeContext = createContext(null);
 export function ThemeProvider({ children, initialDashHex, initialBackHex, storageKey }) {
   const [dashHex, setDashHexState] = useState(initialDashHex || '#2d3e50');
   const [backHex, setBackHexState] = useState(initialBackHex || '#e5e7eb');
+  // The poll exists to propagate colour changes, and only the owner can make
+  // one, and only in edit mode. Everyone else — including the owner reading
+  // their own page — gets the colours from the server render and, across tabs,
+  // from the `storage` listener below. The view clients own edit mode, so they
+  // switch this on; see useThemeSync.
+  const [syncEnabled, setSyncEnabled] = useState(false);
   const localHoldUntilRef = useRef(0);
   const persistedKey = useMemo(
     () => (storageKey ? `volvox_theme_${storageKey}` : ''),
@@ -82,7 +88,7 @@ export function ThemeProvider({ children, initialDashHex, initialBackHex, storag
   }, [persistedKey, applyTheme]);
 
   useEffect(() => {
-    if (!storageKey) return;
+    if (!storageKey || !syncEnabled) return;
 
     let isCancelled = false;
 
@@ -103,6 +109,13 @@ export function ThemeProvider({ children, initialDashHex, initialBackHex, storag
 
         const data = await res.json();
         if (isCancelled) return;
+        // The hold is checked again here, not only before the fetch. A request
+        // takes long enough that the user can pick a colour while it is in
+        // flight, and applying the server's answer afterwards silently threw
+        // that pick away — most easily hit right after entering edit mode,
+        // which is when the poll starts and when someone reaches for the
+        // picker.
+        if (Date.now() < localHoldUntilRef.current) return;
         applyTheme(data?.dashHex, data?.backHex);
       } catch {
         // Ignore background sync failures.
@@ -133,13 +146,26 @@ export function ThemeProvider({ children, initialDashHex, initialBackHex, storag
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [storageKey, applyTheme]);
+  }, [storageKey, applyTheme, syncEnabled]);
 
-  return (
-    <ThemeContext.Provider value={{ dashHex, backHex, setDashHex, setBackHex }}>
-      {children}
-    </ThemeContext.Provider>
+  const value = useMemo(
+    () => ({ dashHex, backHex, setDashHex, setBackHex, setSyncEnabled }),
+    [dashHex, backHex, setDashHex, setBackHex]
   );
+
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+}
+
+/**
+ * Turn the background theme sync on while the viewer can actually change the
+ * colours. Call it from the view that owns edit mode.
+ */
+export function useThemeSync(enabled) {
+  const { setSyncEnabled } = useTheme();
+  useEffect(() => {
+    setSyncEnabled(Boolean(enabled));
+    return () => setSyncEnabled(false);
+  }, [enabled, setSyncEnabled]);
 }
 
 export function useTheme() {

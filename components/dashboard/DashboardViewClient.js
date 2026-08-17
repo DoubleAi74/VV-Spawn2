@@ -5,7 +5,7 @@ import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { useTheme } from "@/context/ThemeContext";
+import { useTheme, useThemeSync } from "@/context/ThemeContext";
 import { mutationFailureDetail, useToast } from "@/context/ToastContext";
 import { mergeServerAndOptimistic } from "@/lib/optimisticMerge";
 import { reorderItemsByIndex, swapItemsByIds } from "@/lib/ordering";
@@ -53,6 +53,9 @@ export default function DashboardViewClient({ user, initialPages }) {
 
   const isOwner = sessionUser?.usernameTag === user.usernameTag;
   const [isEditMode, setIsEditMode] = useState(false);
+  // The theme poll only has anything to report while its own colours can be
+  // changed, which is the owner in edit mode and nobody else.
+  useThemeSync(isOwner && isEditMode);
   const [pages, setPages] = useState(initialPages);
   const [showCreate, setShowCreate] = useState(false);
   const [editingPage, setEditingPage] = useState(null);
@@ -88,6 +91,9 @@ export default function DashboardViewClient({ user, initialPages }) {
     // The editor reports a rejected save in its own status line. Without this
     // check a failed request still read as "Saved".
     if (!res.ok) throw new Error("Failed to save dashboard info");
+    // Hand back what was actually stored so the preview shows exactly that.
+    const stored = await res.json().catch(() => ({}));
+    return typeof stored.infoText === "string" ? stored.infoText : infoText;
   }
 
   // ── Create page ──
@@ -361,6 +367,9 @@ export default function DashboardViewClient({ user, initialPages }) {
               onMoveDown={handleMoveDown}
               isFirst={idx === 0}
               isLast={idx === visiblePages.length - 1}
+              // The first row is above the fold on every breakpoint (2 columns
+              // on phones, 4 on desktop), so it must not be lazy-loaded.
+              priority={idx < 4}
             />
           ))}
         </div>

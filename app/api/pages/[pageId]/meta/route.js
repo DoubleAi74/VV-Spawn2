@@ -22,5 +22,6 @@ export async function PATCH(request, { params }) {
   const clean2 = sanitizeRichText(infoText2 || '');
 
   await updatePageMeta(pageId, clean1, clean2);
-  return NextResponse.json({ success: true });
+  // The editor adopts these, so what it shows is exactly what was stored.
+  return NextResponse.json({ success: true, infoText1: clean1, infoText2: clean2 });
 }
