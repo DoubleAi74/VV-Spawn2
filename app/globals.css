@@ -9,16 +9,11 @@ body {
   overscroll-behavior-y: none;
 }
 
-html,
-body {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-html::-webkit-scrollbar,
-body::-webkit-scrollbar {
-  display: none;
-}
+/* The page scrollbar stays visible. Hiding it removed the main affordance
+   telling a visitor there is more work below the fold — on a site whose whole
+   job is showing someone's work, that is the wrong thing to hide. The styled
+   thin scrollbar lower in this file is what it looks like. Modals still hide
+   theirs, where the height is controlled and the bar is noise. See LNK-5. */
 
 html,
 body,
@@ -131,9 +126,12 @@ body,
   border-radius: 3px;
 }
 
-/* ── Focus ring ── */
+/* ── Focus ring ──
+   #2d3e50 was hardcoded, and vanishes against any dark custom theme. The view
+   clients set --focus-ring from the background each control actually sits on
+   (LNK-4); the literal stays as the fallback for anything outside them. */
 :focus-visible {
-  outline: 2px solid #2d3e50;
+  outline: 2px solid var(--focus-ring, #2d3e50);
   outline-offset: 2px;
 }
 

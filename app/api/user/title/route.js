@@ -16,9 +16,11 @@ export async function PATCH(request) {
 
   const baseTag = toBaseSlug(usernameTitle.trim());
   let usernameTag = baseTag || 'user';
-  // Only generate a new tag if the title has changed enough to produce a different slug
+  // Only generate a new tag if the title has changed enough to produce a different slug.
+  // The account is excluded from the uniqueness check so it can reclaim one of
+  // its own former tags rather than being pushed onto a numeric suffix.
   if (usernameTag !== session.user.usernameTag) {
-    usernameTag = await uniqueUsernameTag(usernameTag);
+    usernameTag = await uniqueUsernameTag(usernameTag, session.user.userId);
   } else {
     usernameTag = session.user.usernameTag;
   }

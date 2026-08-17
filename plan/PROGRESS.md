@@ -1238,6 +1238,189 @@ Stage 7 checks from `STAGES.md`:
 drawn 32×32, no hit-target pseudo element, a mouse click still arms, moving the mouse off
 the card still disarms, and hovering still brings the controls to full opacity.
 
+## Stage 8 — Links that work
+
+**A defect the plan did not know about, found while verifying this stage, and it
+invalidated the whole stage until it was fixed.**
+
+Every status code on the two public routes was wrong. `/{unknown-tag}` answered **200**
+with the not-found body — a soft 404 — and `permanentRedirect()` answered **200** with
+the destination's body served at the *old* address. Both measured against a production
+build, so this is not a dev-server artefact; it has been the live behaviour since REL-3's
+stage, and probably since `loading.js` was introduced.
+
+The cause is `loading.js`. It opens a Suspense boundary around everything below its
+segment, and React flushes the response shell — status line included — the moment
+anything inside suspends. Both public routes are `force-dynamic` and await a session and
+a database read, so they always suspend, so the status was always already sent.
+Isolated by measurement: a bare `force-dynamic` route with the same `auth()` and
+database call, outside that segment, answers **308** and **404** correctly; the same
+calls inside the segment answer 200; removing both `loading.js` files restores 308 and
+404. LNK-1, LNK-2 and LNK-3 are all about what a machine sees, so none of them meant
+anything until this was fixed.
+
+**The fix keeps the skeletons.** The decision now happens above the boundary:
+
+- `app/[usernameTag]/layout.js` (new) 404s a tag that has never existed. It deliberately
+  does **not** redirect a renamed one — a layout cannot see the segments below it, so
+  redirecting there would send `/{old-tag}/{old-slug}` to `/{new-tag}` and drop the page.
+- `app/[usernameTag]/page.js` decides the profile's own redirect *before* returning its
+  Suspense element, so the status is still the server's to set.
+- `app/[usernameTag]/[pageSlug]/layout.js` (new) sees both segments and canonicalises the
+  whole path in **one** 308.
+- `app/[usernameTag]/loading.js` became `components/dashboard/DashboardSkeleton.js`, a
+  Suspense fallback rendered inside the page. Same skeleton, same snapshot, same moment
+  on screen — just below the point where the status is decided.
+  `app/[usernameTag]/[pageSlug]/loading.js` is unchanged: its segment's layout already
+  sits above it.
+- `resolveUsernameTag` and `resolvePageSlug` are wrapped in React `cache()`, so a layout
+  and the page below it share one query rather than repeating it.
+
+Measured against `next build` + `next start`, every request fresh and uncached:
+
+| URL | before | after |
+|---|---|---|
+| `/{tag that never existed}` | **200** | **404** |
+| `/{tag}/{slug that never existed}` | **200** | **404** |
+| `/{live tag}` and `/{live tag}/{live slug}` | 200 | 200 |
+| `/{old tag}` | **200**, profile body at the wrong address | **308 → `/{new tag}`** |
+| `/{tag}/{old slug}` | **200**, page body at the wrong address | **308 → `/{tag}/{new slug}`** |
+| `/{old tag}/{old slug}` | **200** | **308 → `/{new tag}/{new slug}`, one hop** |
+| the address that 308 points at | — | **200**, not another redirect |
+
+- [x] **LNK-1 — per-page metadata and OpenGraph.** `generateMetadata` on both dynamic
+  routes, sharing a new `lib/metadata.js`: the origin, a rich-text-to-one-line
+  description with a 200-character cap, and the OpenGraph image block.
+
+  **The OG image asks for `FULL_IMAGE_WIDTH` (1600)** — the bucket PERF-1 actually
+  shipped, read from `lib/cloudflareLoader.js`. Social scrapers want roughly 1200px and a
+  third bucket would be a third Cloudflare transform billed per image for a preview
+  thumbnail, so previews reuse the lightbox's existing transform. The origin comes from
+  `NEXT_PUBLIC_SITE_URL`, falling back to `NEXTAUTH_URL`, which is already the canonical
+  origin for the deployment — no second source of truth unless the public origin differs.
+
+  | | profile | page |
+  |---|---|---|
+  | `<title>` | `Adam Aldridge — Volvox Works` | `Web projects — Adam Aldridge` |
+  | description | from `dashboard.infoText`, else `Works by {name}.` | from the page description, else a sentence naming it |
+  | `og:image` | first **public** page's thumbnail, `width=1600` | the page's own thumbnail, `width=1600` |
+  | `og:url` / canonical | absolute, canonical | absolute, canonical |
+  | `twitter:card` | `summary_large_image` | `summary_large_image` |
+  | `robots` | absent (indexable) | absent, or **`noindex`** when the page is private |
+
+  The description is plain text with no markup, asserted. A profile with nothing public
+  gets a card with no image rather than one advertising a page it will not show.
+
+- [x] **LNK-2 — `robots.txt` and `sitemap.xml`.** `app/robots.js` and `app/sitemap.js`
+  (JavaScript — this project has no TypeScript, so `sitemap.ts` was not an option).
+  Verified: robots disallows `/api/`, `/admin` and `/login` and points at the sitemap;
+  the sitemap listed 15 URLs covering **every one of the 9 public pages** and **none of
+  the 4 private ones**, with no `/admin`, `/login` or `/api` entry. Revalidates hourly.
+
+- [x] **LNK-3 — slug history with permanent redirects.** `previousSlugs` on `Page` and
+  `previousTags` on `User`, each with an index, appended on change. Reclaiming a former
+  address removes it from the history rather than leaving an entry that redirects to
+  itself.
+
+  **Uniqueness considers the history**, which is the half that stops the feature eating
+  itself: `usernameTagIsTaken` and `pageSlugIsTaken` reject an address that is currently
+  held *or still redirecting*, so a new page cannot claim an address that sends its
+  visitors somewhere else. Tested explicitly — a second page titled "First Title" while
+  `first-title` still redirects got **`first-title-2`**, and `first-title` went on
+  pointing at the original page, not the newcomer. An account is excluded from its own
+  check so it can reclaim one of its own former tags.
+
+  Verified end to end **on a scratch account created through the real signup flow**, so
+  the real account's display name — which is its entire public URL — was never touched:
+
+  | step | result |
+  |---|---|
+  | page created as "First Title" | `/{tag}/first-title` |
+  | renamed to "Second Title" | slug `second-title`, `previousSlugs: ["first-title"]` |
+  | `GET /{tag}/first-title` | **308 → `/{tag}/second-title`** |
+  | a new page also titled "First Title" | slug **`first-title-2`** |
+  | `/{tag}/first-title` afterwards | still **308**, still to `second-title` |
+  | display name renamed | `@zz-scratch-linktest-3 → @zz-scratch-renamed-2`, `previousTags` holds the old tag |
+  | `GET /{old tag}` | **308 → `/{new tag}`** |
+  | `GET /{old tag}/{old slug}` | **308 → `/{new tag}/{new slug}`**, one hop, and that lands 200 |
+  | `GET /{tag that never existed}` | **404** |
+
+  All of it through `cache: 'no-store'` with `redirect: 'manual'` — a redirect check
+  against a cached response proves nothing.
+
+  *Note on how this was run:* status codes only mean anything against a production build,
+  but `next start` would not accept the harness's minted session cookie, so the
+  authenticated mutations (signup, page create, both renames) ran against the dev server
+  and every status assertion was made against `next start` — same database, so the state
+  is shared. Both servers were up at once, on 3000 and 3001, deliberately and knowingly.
+
+  The three scratch accounts were removed afterwards with a new
+  **`scripts/delete-user.mjs`** (dry run by default, `--email` required, `--commit` to
+  apply). It is the only way to delete an account at all — there is no UI for it. Dry
+  runs shown, then applied: 3 accounts, 4 pages, 0 posts, 0 files. `normalize-order` and
+  `sweep-orphans` both report zero afterwards.
+
+- [x] **LNK-4 — contrast guard.** `readableInkOn(hex)` and `focusRingOn(hex)` in
+  `lib/colour.js`, chosen by measured WCAG contrast rather than a fixed lighten. The
+  header title was `lighten(dashHex, 245)`, which clamps to near-white on any pale header
+  — pick a pale colour and your own name disappears. The focus ring was hardcoded
+  `#2d3e50`, invisible against a dark theme; it now comes from a `--focus-ring` custom
+  property set from the background each control actually sits on (the header sets its own
+  from `dashHex`, the page from `backHex`), with the old literal kept as the fallback.
+
+  Measured in the browser on the scratch account, with the theme driven to the extremes:
+
+  | theme | title colour | contrast | focus ring | ring contrast |
+  |---|---|---|---|---|
+  | **white on white** (`#ffffff` / `#ffffff`) | `rgb(17,24,39)` | **17.74:1** | `#111827` | **17.74:1** |
+  | **black on black** (`#000000` / `#000000`) | `rgb(248,250,252)` | **20.07:1** | `#f8fafc` | **20.07:1** |
+  | a pale pair (`#e5e7eb` / `#f8fafc`) | `rgb(17,24,39)` | 14.33:1 | `#111827` | 14.33 / 16.96:1 |
+
+  And the ring is what a real control draws: tabbing to the header's Edit button gives
+  `outline: 2px solid` in the theme's ink, at **17.57:1** on white and **20.07:1** on
+  black. That check took two attempts — `element.focus()` from script does not match
+  `:focus-visible`, and the first Tab in dev lands on Next's own dev-tools indicator,
+  which lives in a shadow root the page's stylesheet cannot reach. Both readings were
+  measuring the user-agent default, not this rule.
+
+- [x] **LNK-5 — height and scrollbars.** `min-h-[150vh]` → `min-h-screen`, and the
+  `scrollbar-width: none` / `::-webkit-scrollbar { display: none }` rules on `html` and
+  `body` are gone. Modals keep hiding their own, where the height is controlled.
+
+  | check | result |
+  |---|---|
+  | two-page dashboard | `scrollHeight 900` vs viewport `900` — **does not scroll** |
+  | `scrollbar-width` on html and body | **`auto`**, no longer `none` |
+  | the `html/body ::-webkit-scrollbar { display: none }` rule | **not present in any stylesheet** |
+  | a 30-post page | `scrollHeight 2567` vs viewport `900` — scrolls |
+
+  The layout gutter is 0px because macOS draws overlay scrollbars, which take no width —
+  an OS setting, not a suppression. The assertion is on the rules, which is the part the
+  app controls.
+
+### Stage 8 gate
+
+| Check | Result |
+|---|---|
+| `npx next lint` | ✔ No ESLint warnings or errors |
+| `node --test lib/*.test.mjs` | 21 pass, 0 fail |
+| `npm run build` | ✔ compiled first attempt; `/robots.txt` and `/sitemap.xml` listed |
+| `node scripts/normalize-order.mjs` | 0 corrections |
+| `node scripts/sweep-orphans.mjs` | 0 orphans |
+| First-load JS | `/[usernameTag]` 139 → **141 kB**, `/[usernameTag]/[pageSlug]` **145 kB** (unchanged) |
+
+Stage 8 checks from `STAGES.md`:
+
+- ✔ A page URL previews as itself — own title, own description, own image, absolute
+  `og:url`, `summary_large_image`.
+- ✔ Private page: `noindex`. `/admin` and `/login` excluded from the sitemap, and every
+  private page too.
+- ✔ Rename a page → the old URL **308s**. Rename a display name → the old profile URL
+  **308s**. Verified with fresh, uncached requests against a production build.
+- ✔ Extremes on the theme picker — white on white, black on black — leave the title and
+  the focus ring visible, at 17.7:1 and 20.1:1.
+- ✔ A two-page dashboard does not scroll; a long page shows a scrollbar.
+
 ## Discovered, not actioned
 
 - **`tailwind.config.js` did not scan `context/`** — found via REL-2, fixed there because the
@@ -1339,6 +1522,13 @@ as fully done.
 ## New environment variables
 
 (Names and purposes only — never values. Set these in production.)
+
+- **`NEXT_PUBLIC_SITE_URL`** — the site's public origin, used for absolute OpenGraph and
+  canonical URLs (LNK-1) and for the `sitemap.xml` entries and the `Sitemap:` line in
+  `robots.txt` (LNK-2). **Optional.** It falls back to `NEXTAUTH_URL`, which is already
+  the canonical origin for the deployment, and then to `http://localhost:3000`. Set it
+  only if the public origin ever differs from `NEXTAUTH_URL`. A wrong value here does not
+  break the app, but it makes every shared link preview point at the wrong host.
 
 - **`ADMIN_USER_IDS`** — comma-separated list of MongoDB user ids allowed to load `/admin`.
   Anyone else, signed in or not, gets a 404. **If it is unset in production, `/admin` is

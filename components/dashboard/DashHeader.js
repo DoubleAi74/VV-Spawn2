@@ -7,7 +7,7 @@ import { signOut } from "next-auth/react";
 import TitleEdit, { TitleEditPanel } from "@/components/dashboard/TitleEdit";
 import { useTheme } from "@/context/ThemeContext";
 import { useToast } from "@/context/ToastContext";
-import { lighten } from "@/lib/colour";
+import { focusRingOn, lighten, readableInkOn } from "@/lib/colour";
 
 // Long enough that a continuous drag of the native picker never reaches it —
 // the write happens when the drag stops, or immediately on `change` when the
@@ -121,6 +121,9 @@ export default function DashHeader({
       style={{
         backgroundColor: dashHex,
         paddingTop: "env(safe-area-inset-top, 0px)",
+        // Controls in here sit on dashHex, not on the page background, so the
+        // header carries its own ring colour. See LNK-4.
+        "--focus-ring": focusRingOn(dashHex),
       }}
     >
       <div className="w-full px-4 sm:px-8">
@@ -131,7 +134,9 @@ export default function DashHeader({
               isEditMode={isEditMode}
               editing={titleEditing}
               onEditingChange={setTitleEditing}
-              textColor={lighten(dashHex, 245)}
+              // lighten(dashHex, 245) clamped to near-white on any pale
+              // header and the user's own name disappeared. See LNK-4.
+              textColor={readableInkOn(dashHex)}
             />
 
             {isOwner && isEditMode && (

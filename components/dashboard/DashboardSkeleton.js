@@ -1,5 +1,21 @@
 "use client";
 
+/**
+ * The dashboard's loading state.
+ *
+ * This used to be `app/[usernameTag]/loading.js`. A `loading.js` opens a
+ * Suspense boundary around everything below its segment, and React flushes the
+ * response shell — status line included — the moment anything inside it
+ * suspends. That made `notFound()` and `permanentRedirect()` in either public
+ * route unable to set a status: an unknown profile answered 200 with the
+ * not-found body, and a renamed page answered 200 with the destination's body
+ * at the old address. Neither is any use to a crawler or a link preview, which
+ * is the whole point of LNK-1 to LNK-3.
+ *
+ * It is now a Suspense fallback rendered *inside* the page, below the layout
+ * that decides the status. Same skeleton, same snapshot, same moment on screen.
+ */
+
 import { useEffect } from "react";
 import { useParams } from "next/navigation";
 import ImageWithLoader from "@/components/ImageWithLoader";
@@ -57,7 +73,7 @@ function DashboardLoadingCard({ page, priority = false }) {
   );
 }
 
-export default function DashboardLoading() {
+export default function DashboardSkeleton() {
   const params = useParams();
   const usernameTag =
     typeof params?.usernameTag === "string" ? params.usernameTag : "";

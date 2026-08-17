@@ -12,6 +12,7 @@ import { reorderItemsByIndex, swapItemsByIds } from "@/lib/ordering";
 import { useQueue } from "@/lib/useQueue";
 import { useFlipReorder } from "@/lib/useFlipReorder";
 import { REORDER_DEBOUNCE_MS } from "@/lib/motion";
+import { focusRingOn } from "@/lib/colour";
 import { setDashboardSnapshot } from "@/lib/routeTransitionCache";
 import DashHeader from "@/components/dashboard/DashHeader";
 import PageCard from "@/components/dashboard/PageCard";
@@ -392,8 +393,14 @@ export default function DashboardViewClient({ user, initialPages }) {
 
   return (
     <div
-      className="min-h-[150vh] overscroll-none"
-      style={{ backgroundColor: backHex }}
+      // min-h-[150vh] forced one and a half screens of empty background even
+      // for a user with two pages, so a new account's first action was
+      // scrolling through nothing. See LNK-5.
+      className="min-h-screen overscroll-none"
+      style={{
+        backgroundColor: backHex,
+        "--focus-ring": focusRingOn(backHex),
+      }}
     >
       <div
         className="sticky top-0 left-0 right-0 z-50"

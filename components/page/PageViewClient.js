@@ -20,7 +20,7 @@ import CreatePostModal from "@/components/page/CreatePostModal";
 import EditPostModal from "@/components/page/EditPostModal";
 import BulkUploadModal from "@/components/page/BulkUploadModal";
 import PhotoShowModal from "@/components/page/PhotoShowModal";
-import { lighten, hexToRgba } from "@/lib/colour";
+import { focusRingOn, hexToRgba, lighten, readableInkOn } from "@/lib/colour";
 
 function hasVisiblePageInfo(value) {
   return Boolean(value && value !== "<p><br></p>" && value.trim() !== "");
@@ -404,7 +404,10 @@ export default function PageViewClient({ user, page, initialPosts }) {
   return (
     <div
       className="min-h-screen w-full p-0 md:px-6 overscroll-none flex flex-col"
-      style={{ backgroundColor: hexToRgba(backHex, 0.5) }}
+      style={{
+        backgroundColor: hexToRgba(backHex, 0.5),
+        "--focus-ring": focusRingOn(backHex),
+      }}
     >
       <header
         className="sticky top-0 left-0 right-0 z-40 shadow-md"
@@ -413,6 +416,9 @@ export default function PageViewClient({ user, page, initialPosts }) {
           paddingTop: "env(safe-area-inset-top, 0px)",
           marginTop: "-4px",
           paddingBottom: "4px",
+          // See LNK-4: the header's controls sit on dashHex, so it carries its
+          // own ring colour rather than the page's.
+          "--focus-ring": focusRingOn(dashHex),
         }}
       >
         <div className="flex items-center justify-between min-h-[52px] sm:min-h-[64px] px-4 sm:px-6">
@@ -430,7 +436,8 @@ export default function PageViewClient({ user, page, initialPosts }) {
             </button>
             <h1
               className="text-xl sm:text-2xl font-bold tracking-wide truncate"
-              style={{ color: lighten(dashHex, 245) }}
+              // See LNK-4: chosen by measured contrast, not a fixed lighten.
+              style={{ color: readableInkOn(dashHex) }}
             >
               {page.title}
             </h1>
