@@ -26,20 +26,66 @@ body,
   min-height: 100%;
 }
 
-/* ── Blur-up image animation ── */
-@keyframes blur-up {
+/* ── Modal enter and exit ──
+   Keyframes rather than transitions so the animation starts on the element's
+   first paint. A transition needs the "from" state painted before the class
+   flips, which is a frame of guesswork this does not need. */
+@keyframes modal-backdrop-in {
   from {
-    filter: blur(8px);
-    opacity: 0.8;
+    opacity: 0;
   }
   to {
-    filter: blur(0);
     opacity: 1;
   }
 }
 
-.image-loaded {
-  animation: blur-up 0.3s ease-out forwards;
+@keyframes modal-backdrop-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes modal-panel-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes modal-panel-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+.modal-backdrop {
+  animation: modal-backdrop-in 150ms ease-out both;
+}
+
+.modal-panel {
+  animation: modal-panel-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.modal-backdrop[data-closing="true"] {
+  animation: modal-backdrop-out 140ms ease-in both;
+  /* A dying panel must not take a second click. */
+  pointer-events: none;
+}
+
+.modal-panel[data-closing="true"] {
+  animation: modal-panel-out 140ms ease-in both;
 }
 
 /* ── Skeleton shimmer ── */
@@ -89,4 +135,23 @@ body,
 :focus-visible {
   outline: 2px solid #2d3e50;
   outline-offset: 2px;
+}
+
+/* ── Reduced motion ──
+   Everything above this line is decoration. Someone who has asked their system
+   for less movement gets the end state immediately, not a faster version of the
+   journey. Kept to a duration rather than `none` so anything waiting on
+   animationend or transitionend still fires.
+
+   The reorder reflow animates through the Web Animations API, which CSS cannot
+   reach — lib/motion.js reads the same query in JavaScript for that. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

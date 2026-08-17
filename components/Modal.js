@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { MODAL_EXIT_MS, prefersReducedMotion } from "@/lib/motion";
 
 /**
  * components/Modal.js — the shell every modal shares.
@@ -11,8 +12,51 @@ import { useCallback, useEffect, useRef } from "react";
  * behind the backdrop, and closing left focus on <body>.
  *
  * The modals keep their own backdrop and panel classes — this owns behaviour,
- * not appearance.
+ * not appearance. The enter and exit animation lives in `.modal-backdrop` and
+ * `.modal-panel` in app/globals.css, applied here so it is written once.
  */
+
+/**
+ * Holds the modal on screen for the length of its exit animation.
+ *
+ * The parent unmounts the modal, so the modal cannot animate its own exit
+ * without deferring that unmount. Each modal therefore closes through
+ * `requestClose` instead of calling its `onClose` prop directly — including
+ * from Modal's own Escape and backdrop handlers, which receive `requestClose`
+ * as their `onClose`.
+ *
+ * Opening is not deferred: the enter animation runs on an already-interactive
+ * modal.
+ */
+export function useModalExit(onClose) {
+  const [isClosing, setIsClosing] = useState(false);
+  const timerRef = useRef(null);
+
+  const requestClose = useCallback(() => {
+    // A second Escape, or a click on a control while the exit is running.
+    if (timerRef.current) return;
+
+    if (prefersReducedMotion()) {
+      onClose?.();
+      return;
+    }
+
+    setIsClosing(true);
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null;
+      onClose?.();
+    }, MODAL_EXIT_MS);
+  }, [onClose]);
+
+  useEffect(
+    () => () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    },
+    [],
+  );
+
+  return { isClosing, requestClose };
+}
 
 const FOCUSABLE = [
   "a[href]",
@@ -57,6 +101,7 @@ function unlockBodyScroll() {
 
 export default function Modal({
   onClose,
+  isClosing = false,
   backdropClassName,
   className,
   labelledBy,
@@ -136,7 +181,8 @@ export default function Modal({
 
   return (
     <div
-      className={backdropClassName}
+      className={`${backdropClassName} modal-backdrop`}
+      data-closing={isClosing ? "true" : undefined}
       onMouseDown={(event) => {
         backdropPressRef.current = event.target === event.currentTarget;
       }}
@@ -156,7 +202,8 @@ export default function Modal({
         aria-label={labelledBy ? undefined : ariaLabel}
         tabIndex={-1}
         onKeyDown={handleTrap}
-        className={`${className} focus:outline-none`}
+        data-closing={isClosing ? "true" : undefined}
+        className={`${className} modal-panel focus:outline-none`}
       >
         {children}
       </div>

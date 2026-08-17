@@ -67,12 +67,15 @@ export default function ImageWithLoader({
   }, []);
 
   const shouldUseNextBlur = Boolean(useNextBlurPlaceholder && blurDataURL && isLoading);
+  // 700ms read as sluggish on a grid where twenty images reveal at once, and
+  // PERF-1 made it worse: the card bucket decodes fast enough that the reveal
+  // is now most of the delay the user perceives, not a fraction of it.
   const revealClassName = shouldAnimateReveal
     ? blurDataURL
-      ? `transition-opacity duration-700 ease-out will-change-[opacity] ${
+      ? `transition-opacity duration-300 ease-out will-change-[opacity] ${
           isLoading ? 'opacity-0' : 'opacity-100'
         }`
-      : `transition-[opacity,filter] duration-700 ease-out will-change-[opacity,filter] ${
+      : `transition-[opacity,filter] duration-300 ease-out will-change-[opacity,filter] ${
           isLoading ? 'opacity-0 blur-[10px]' : 'opacity-100 blur-0'
         }`
     : '';

@@ -14,7 +14,7 @@ import {
 import RichTextEditorFallback, {
   RICH_TEXT_EDITOR_FRAME_HEIGHT_CLASS,
 } from "@/components/page/RichTextEditorFallback";
-import Modal from "@/components/Modal";
+import Modal, { useModalExit } from "@/components/Modal";
 import UploadProgressBar from "@/components/UploadProgressBar";
 import { useToast } from "@/context/ToastContext";
 import { processImageForUpload, fetchServerBlur } from "@/lib/processImage";
@@ -52,6 +52,9 @@ export default function CreatePostModal({
   onBulkUpload,
   onToMultiple,
 }) {
+  // The exit animation needs the modal on screen a moment longer than the
+  // parent would keep it, so every close goes through requestClose.
+  const { isClosing, requestClose } = useModalExit(onClose);
   const [activeTab, setActiveTab] = useState("photo");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -140,7 +143,7 @@ export default function CreatePostModal({
     if (accepted.length === 0) return;
 
     onBulkUpload(accepted);
-    onClose();
+    requestClose();
   }
 
   async function uploadPhoto(nextFile) {
@@ -266,7 +269,7 @@ export default function CreatePostModal({
         await onCreate(payload);
       }
 
-      onClose();
+      requestClose();
     } catch (err) {
       // Everything the user chose and typed stays put, and any file that
       // already reached R2 is remembered, so "Create Post" resumes.
@@ -308,7 +311,8 @@ export default function CreatePostModal({
 
   return (
     <Modal
-      onClose={onClose}
+      onClose={requestClose}
+      isClosing={isClosing}
       ariaLabel={TAB_LABELS[activeTab]}
       backdropClassName="fixed inset-0 z-[200] bg-black/20 flex items-center justify-center p-4"
       className="bg-neutral-900/90 backdrop-blur-[4px] border border-white/[0.08] rounded-[5px] p-6 w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl shadow-black/50"
@@ -345,7 +349,7 @@ export default function CreatePostModal({
 
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className="flex items-center gap-1.5 py-1.5 px-2.5 rounded-[2px] bg-white/[0.06] hover:bg-white/12 active:bg-white/15 text-white/50 hover:text-white/90 transition-all duration-150"
           >
             <X className="w-4 h-4" />
@@ -546,7 +550,7 @@ export default function CreatePostModal({
       <div className="flex gap-3 pt-4 mt-auto flex-shrink-0">
         <button
           type="button"
-          onClick={onClose}
+          onClick={requestClose}
           className="flex-1 py-2.5 rounded-[3px] bg-white/[0.04] border border-white/[0.08] text-white/50 font-medium hover:bg-white/[0.08] hover:border-white/15 hover:text-white/70 active:bg-white/12 transition-all duration-150"
         >
           Cancel

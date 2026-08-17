@@ -10,7 +10,7 @@ import {
   Loader2,
   CheckCircle,
 } from "lucide-react";
-import Modal from "@/components/Modal";
+import Modal, { useModalExit } from "@/components/Modal";
 import UploadProgressBar from "@/components/UploadProgressBar";
 import { useToast } from "@/context/ToastContext";
 import { processImageForUpload, fetchServerBlur } from "@/lib/processImage";
@@ -39,6 +39,9 @@ export default function BulkUploadModal({
   onUploadComplete,
   onBackToSingle,
 }) {
+  // The exit animation needs the modal on screen a moment longer than the
+  // parent would keep it, so every close goes through requestClose.
+  const { isClosing, requestClose } = useModalExit(onClose);
   const [files, setFiles] = useState(() =>
     (initialFiles || []).map(makeUploadItem),
   );
@@ -163,7 +166,7 @@ export default function BulkUploadModal({
     const pending = files.filter((item) => !deliveredRef.current.has(item.id));
     if (pending.length === 0) {
       setUploading(false);
-      onClose();
+      requestClose();
       return;
     }
 
@@ -280,7 +283,7 @@ export default function BulkUploadModal({
         return;
       }
 
-      onClose();
+      requestClose();
     } catch (err) {
       setError(err.message || "Bulk upload failed");
       showError("Couldn't upload those images", err.message || "Please try again.", {
@@ -309,7 +312,8 @@ export default function BulkUploadModal({
 
   return (
     <Modal
-      onClose={onClose}
+      onClose={requestClose}
+      isClosing={isClosing}
       ariaLabel="Upload multiple images"
       backdropClassName="fixed inset-0 z-[200] bg-black/20 flex items-center justify-center p-4"
       className="bg-neutral-900/90 backdrop-blur-[4px] border border-white/[0.08] rounded-[5px] p-6 w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl shadow-black/50"
@@ -332,7 +336,7 @@ export default function BulkUploadModal({
         </div>
         <button
           type="button"
-          onClick={onClose}
+          onClick={requestClose}
           className="flex items-center gap-1.5 py-1.5 px-2.5 rounded-[2px] bg-white/[0.06] hover:bg-white/12 active:bg-white/15 text-white/50 hover:text-white/90 transition-all duration-150"
         >
           <X className="w-4 h-4" />
@@ -488,7 +492,7 @@ export default function BulkUploadModal({
       <div className="flex gap-3 pt-4 mt-auto flex-shrink-0">
         <button
           type="button"
-          onClick={onClose}
+          onClick={requestClose}
           className="flex-1 py-2.5 rounded-[3px] bg-white/[0.04] border border-white/[0.08] text-white/50 font-medium hover:bg-white/[0.08] hover:border-white/15 hover:text-white/70 active:bg-white/12 transition-all duration-150"
         >
           Cancel

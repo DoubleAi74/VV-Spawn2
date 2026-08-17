@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { X, Upload, Image as ImageIcon } from 'lucide-react';
-import Modal from '@/components/Modal';
+import Modal, { useModalExit } from '@/components/Modal';
 import UploadProgressBar from '@/components/UploadProgressBar';
 import { useToast } from '@/context/ToastContext';
 import { clampOrderIndex } from '@/lib/ordering';
@@ -11,6 +11,9 @@ import { toBaseSlug } from '@/lib/slug';
 import { uploadToStorage, useUploadedOnce } from '@/lib/uploadFile';
 
 export default function EditPageModal({ page, itemCount, onClose, onSave }) {
+  // The exit animation needs the modal on screen a moment longer than the
+  // parent would keep it, so every close goes through requestClose.
+  const { isClosing, requestClose } = useModalExit(onClose);
   const [title, setTitle] = useState(page.title || '');
   const [subtitle, setSubtitle] = useState(page.description || '');
   const [slug, setSlug] = useState(page.slug || '');
@@ -105,7 +108,7 @@ export default function EditPageModal({ page, itemCount, onClose, onSave }) {
         thumbnail,
         blurDataURL,
       });
-      onClose();
+      requestClose();
     } catch (err) {
       // The modal stays open with the form intact, and a thumbnail that already
       // uploaded is remembered, so retrying resumes rather than restarting.
@@ -124,7 +127,8 @@ export default function EditPageModal({ page, itemCount, onClose, onSave }) {
 
   return (
     <Modal
-      onClose={onClose}
+      onClose={requestClose}
+      isClosing={isClosing}
       labelledBy="edit-page-modal-title"
       backdropClassName="fixed inset-0 bg-black/20 flex items-center justify-center z-[200] p-4"
       className="bg-neutral-900/90 backdrop-blur-[4px] border border-white/[0.08] rounded-[5px] p-6 w-full max-w-md shadow-2xl shadow-black/50"
@@ -133,7 +137,7 @@ export default function EditPageModal({ page, itemCount, onClose, onSave }) {
         <h2 id="edit-page-modal-title" className="text-lg font-semibold text-white">Edit Page</h2>
         <button
           type="button"
-          onClick={onClose}
+          onClick={requestClose}
           className="flex items-center gap-1.5 py-1.5 px-2.5 rounded-[2px] bg-white/[0.06] hover:bg-white/12 active:bg-white/15 text-white/50 hover:text-white/90 transition-all duration-150"
         >
           <X className="w-4 h-4" />
@@ -302,7 +306,7 @@ export default function EditPageModal({ page, itemCount, onClose, onSave }) {
         <div className="flex gap-3 pt-4">
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className="flex-1 py-2.5 rounded-[3px] bg-white/[0.04] border border-white/[0.08] text-white/50 font-medium hover:bg-white/[0.08] hover:border-white/15 hover:text-white/70 active:bg-white/12 transition-all duration-150"
           >
             Cancel

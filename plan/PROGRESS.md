@@ -913,6 +913,202 @@ of its own in `STAGES.md`.
 | `node scripts/sweep-orphans.mjs` | 0 orphans |
 | First-load JS | `/[usernameTag]` **138 kB**, `/[usernameTag]/[pageSlug]` **143 kB** — unchanged from Stage 5 |
 
+## Stage 6 — Motion
+
+`app/globals.css` gained the `prefers-reduced-motion: reduce` block first, as `STAGES.md`
+requires. It shortens every animation and transition to 0.01ms rather than removing them,
+so anything waiting on `animationend` or `transitionend` still fires. The reorder reflow
+animates through the Web Animations API, which a CSS media query cannot reach, so
+`lib/motion.js` reads the same query in JavaScript — one module owning both the durations
+and the question of whether to move at all.
+
+- [x] **MOT-1 — animate the reorder reflow.** New `lib/useFlipReorder.js`: measure, let
+  React commit, measure again, animate each card from where it was to where it now is.
+  200ms, `cubic-bezier(0.22, 1, 0.36, 1)`. The `flushSync` already in `moveByOffset` (a
+  sequencing requirement, not a visual one) is what makes the second measurement available
+  immediately. Cards are found by `data-flip-key` on their root element — an attribute
+  rather than a wrapper div, so the grid layout it describes is not itself changed.
+
+  Two details that matter: the "before" measurement deliberately includes any transform
+  still running, so a card moved again mid-animation continues from where the eye last saw
+  it; and running animations are cancelled **before** the "after" measurement, so that
+  measurement is layout and not a position part-way through an old move.
+
+- [x] **MOT-2 — modal enter and exit, written once.** `.modal-backdrop` / `.modal-panel` in
+  `app/globals.css`, applied by `components/Modal.js`. Keyframes rather than transitions:
+  a transition needs its "from" state painted before the class flips, which is a frame of
+  guesswork with nothing to gain. Backdrop 150ms fade; panel 180ms fade and scale from 0.98.
+
+  The exit needed more than the shell. The parent unmounts the modal, so `Modal` cannot
+  defer its own removal — a new `useModalExit(onClose)` hook holds it for 140ms and each
+  modal now closes through `requestClose` instead of calling `onClose` directly. Converted
+  in all six. **Verifiable by grep:** `onClose` now appears in each of the six files exactly
+  three times — the prop declaration, `useModalExit(onClose)`, and `onClose={requestClose}`
+  handing the wrapped close to the shell — and nowhere else. Every button, every
+  save-then-close, and the shell's own Escape and backdrop paths go through `requestClose`.
+
+- [x] **MOT-3 — the image reveal is 300ms, not 700ms.** `duration-700` → `duration-300` in
+  both branches of `ImageWithLoader`. The dead `.image-loaded` rule and `blur-up` keyframes
+  are gone from `app/globals.css` (CLN-1 lists them; they were removed here, where the
+  reveal was being tuned anyway).
+
+- [x] **MOT-5 — one request per burst.** The persist step is debounced 300ms per grid and
+  sends the final absolute `toIndex`. No server change.
+
+  **The sequence number is bumped on the click, not when the debounce fires.** This is the
+  trap the run brief warned about, and it is real: bumping at flush time leaves a window in
+  which a response from an earlier burst is still the newest sequence and gets applied over
+  state that already reflects later clicks — precisely the stagger the guard exists to
+  prevent. The guard is now checked on **both sides of the request**: before it, because a
+  newer click may have arrived while the op waited its turn in the queue (sending it would
+  write an order nobody is looking at), and after it, because a newer click may have arrived
+  while it was in flight. A pending move is also flushed on unmount, so navigating away
+  inside the debounce window does not lose it.
+
+  While the debounce is pending the header still reads "Saving…" — `isReorderPending` ORs
+  into the queue's own flag, and `enqueue` sets that flag in the same tick the pending flag
+  clears, so the indicator does not blink between the two.
+
+### What the browser showed
+
+**Four-place move, posts grid, on a private scratch page of six posts.** The burst runs
+inside the page, not over the Playwright wire: four clicks driven from the harness add a
+round trip each, which stretches a burst past the debounce and would have tested something
+slower than a real one. `moveByOffset` commits with `flushSync`, so the next chevron is in
+the DOM by the time `click()` returns.
+
+| | 120ms between clicks | 250ms between clicks |
+|---|---|---|
+| burst span | 412 ms | 801 ms |
+| **reorder requests issued** | **1** | **1** |
+| **`toIndex` sent** | **5** (the final position) | **1** (the final position) |
+| FLIP animations running after each click | 2, 3, 3, 3 | — |
+| their durations | 200ms, every one | — |
+| cards carrying a non-identity transform | 2, 3, 3, 3 | — |
+| rendered order | `bravo charlie delta echo alpha foxtrot` | back to `alpha … foxtrot` |
+| stored order | **identical to rendered** | **identical to rendered** |
+| after a full page reload | unchanged | — |
+
+The second burst is the same move in reverse, which returns the page to its starting order —
+so the check is a round trip, not a one-way assertion.
+
+**Four-place move, dashboard grid** — the second copy of the same mechanism, in a different
+file. Five private scratch pages were appended at positions 7–11 and only moved among
+themselves; the six real pages held `1–6` before and after, asserted explicitly. One request,
+`toIndex: 7`, FLIP at 200ms on every click, rendered order equal to stored order, unchanged
+after a reload. All five scratch pages deleted afterwards.
+
+**Reduced motion** (`reducedMotion: 'reduce'` on the browser context, not a CSS override):
+
+| | normal | reduced |
+|---|---|---|
+| FLIP animations per click | 2–3 | **0** |
+| cards displaced mid-move | 2–3 | **0** |
+| modal enter duration | 0.18s panel / 0.15s backdrop | **1e-05s** both |
+| modal close | held 140ms, then unmounts | **unmounts immediately** |
+| image reveal `transition-duration` | 0.3s | **1e-05s** |
+| reorder requests / `toIndex` | 1 / 5 | **1 / 5 — unchanged** |
+
+Reduced motion changes how it looks and nothing about what it does.
+
+**All six modals, sampled on their first DOM mutation** — before the browser has painted a
+frame, because a sample taken later cannot tell an animation from a static style:
+
+| check | result |
+|---|---|
+| panel runs `modal-panel-in` | 6/6 |
+| backdrop runs `modal-backdrop-in` | 6/6 |
+| panel enter 180ms, backdrop 150ms | 6/6 |
+| panel starts at `opacity 0` and `scale(0.98)` | 6/6 |
+| **no flash of unstyled content** — panel already carries its own background at first paint | 6/6 |
+| focus inside the dialog immediately | 6/6 |
+| panel accepts pointer events and is hit-testable immediately | 6/6 |
+| on Escape: `data-closing="true"`, `modal-panel-out` + `modal-backdrop-out` running | 6/6 |
+| a closing modal takes no further clicks (`pointer-events: none`) | 6/6 |
+| unmounted after the exit animation | 6/6 |
+
+**No regression in FND-4.** The Stage 3 modal suite — 66 checks across dialog semantics, the
+Tab and Shift-Tab trap, Escape, backdrop click, the body scroll lock, focus restore to the
+trigger, and the lightbox's arrow keys — was re-run unchanged against the Stage 6 code and
+reports `ALL MODAL CHECKS PASSED`.
+
+- [ ] **MOT-4 — view transitions on navigation. ABANDONED**, on the merits, which
+  `STAGES.md` and the run brief both pre-authorise for this item alone. Reverted cleanly:
+  `git diff` shows no trace of the attempt in `next.config.mjs` or
+  `DashboardViewClient.js`.
+
+  Four findings, three of them observed rather than reasoned:
+
+  1. **The morph this item describes has no destination.** MOT-4 asks for
+     `view-transition-name` on the card thumbnail and "the destination page header image".
+     `grep` for `page.thumbnail` across `components/page/` and the page route returns
+     nothing outside `loading.js`: **the page view never renders the page's own thumbnail
+     at all.** There is no element for the card to morph into.
+  2. **`loading.js` renders a full skeleton in between**, driven by `routeTransitionCache`.
+     Even a generic cross-fade would morph the card into the skeleton rather than the page.
+     The plan half-anticipated this — "the existing `routeTransitionCache` snapshots feeding
+     `loading.js` already do much of this job".
+  3. **The framework path needs a React that is not installed.** `next.config.mjs` accepts
+     `experimental.viewTransition: true` and the dev server starts with it enabled, but
+     React 19.2.4 stable exports no `unstable_ViewTransition` (`Object.keys(React)` matching
+     `/ViewTransition/i` is empty) and Next 15.5.12 ships no view-transition client module.
+     Using it means moving a live application onto React's experimental channel.
+  4. **The manual path decouples the animation from the navigation.** A real attempt was
+     built — `document.startViewTransition(() => router.push(href))` on the card click, with
+     `ready` and `finished` instrumented — and driven in Chrome:
+
+     | callback | fired at | `location.pathname` | cards on screen |
+     |---|---|---|---|
+     | `transition.ready` | **29 ms** | **`/adam-aldridge`** — still the dashboard | 6 (the dashboard's) |
+     | `transition.finished` | **306 ms** | `/adam-aldridge/web-projects` | **0** — the page had not rendered its grid |
+
+     `router.push` is asynchronous and the callback returns nothing, so the browser captured
+     its "after" snapshot 29ms in, while the dashboard was still on screen. The transition
+     animates the dashboard into the dashboard — 300ms of nothing — and the real route change
+     lands after it has finished, as an unanimated hard cut. That is the definition of
+     fighting the App Router.
+
+  Making this work would mean resolving the transition callback against the route commit,
+  which needs framework support that does not exist in these versions. It stays unbuilt, and
+  the reasons are recorded so the next attempt starts from the measurement rather than from
+  the idea. **The two things it would have needed first** are a thumbnail rendered on the
+  page route, and a decision about what `loading.js` should do during a transition.
+
+### Stage 6 gate
+
+| Check | Result |
+|---|---|
+| `npx next lint` | ✔ No ESLint warnings or errors |
+| `node --test lib/*.test.mjs` | 21 pass, 0 fail |
+| `npm run build` | ✔ compiled first attempt, all 26 routes listed |
+| `node scripts/normalize-order.mjs` | 0 corrections |
+| `node scripts/sweep-orphans.mjs` | 0 orphans |
+
+**First-load JS, re-measured because motion adds JavaScript:**
+
+| Route | Stage 4 | Stage 5 | **Stage 6** | vs Stage 0 |
+|---|---|---|---|---|
+| `/[usernameTag]` | 136 kB | 138 kB | **139 kB** | 208 kB → −33% |
+| `/[usernameTag]/[pageSlug]` | 140 kB | 143 kB | **144 kB** | 218 kB → −34% |
+
+**+1 kB per route** for `lib/motion.js` and `lib/useFlipReorder.js`. The modal transition
+and the image reveal cost nothing — both are CSS. Abandoning MOT-4 also avoided the
+`experimental.viewTransition` runtime.
+
+Stage 6 checks from `STAGES.md`:
+
+- ✔ Move a card four places: it animates each step (2–3 cards in motion per click, 200ms
+  each), no flicker, no layout jump, and the database matches the UI at rest — asserted
+  against the stored `order_index`, and again after a full reload.
+- ✔ **MOT-5 specifically:** a four-place move issues **exactly one** reorder request with
+  `toIndex` equal to the final position. Asserted on the request count and the request body,
+  on both grids, in both directions.
+- ✔ With `prefers-reduced-motion: reduce` emulated, all motion is instant: zero FLIP
+  animations, 1e-05s on every CSS animation and transition, and modals close without the
+  140ms hold.
+- ✔ Modals open and close smoothly with no flash of unstyled content — the panel already
+  carries its own background on its first DOM mutation, in all six.
+
 ## Discovered, not actioned
 
 - **`tailwind.config.js` did not scan `context/`** — found via REL-2, fixed there because the

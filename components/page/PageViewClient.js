@@ -11,6 +11,8 @@ import { mutationFailureDetail, useToast } from "@/context/ToastContext";
 import { mergeServerAndOptimistic } from "@/lib/optimisticMerge";
 import { reorderItemsByIndex, swapItemsByIds } from "@/lib/ordering";
 import { useQueue } from "@/lib/useQueue";
+import { useFlipReorder } from "@/lib/useFlipReorder";
+import { REORDER_DEBOUNCE_MS } from "@/lib/motion";
 import { setPageSnapshot } from "@/lib/routeTransitionCache";
 import PostCard from "@/components/page/PostCard";
 import PageInfoEditor from "@/components/page/PageInfoEditor";
@@ -270,27 +272,34 @@ export default function PageViewClient({ user, page, initialPosts }) {
 
   // ── Reorder ──
   // Swap array positions AND renumber order_index together, then adopt only
-  // the newest server response. See DashboardViewClient for the reasoning:
-  // applying an earlier response to state that already reflects later clicks
-  // makes a multi-place move visibly stagger backwards before settling.
+  // the newest server response. See DashboardViewClient for the reasoning,
+  // including why the sequence number is bumped on the click rather than when
+  // the debounce fires.
   const reorderSeqRef = useRef(0);
+  const pendingReorderRef = useRef(null);
+  const reorderTimerRef = useRef(null);
+  const [isReorderPending, setIsReorderPending] = useState(false);
+  const gridRef = useRef(null);
+  const flip = useFlipReorder(gridRef);
 
-  function moveByOffset(post, offset) {
-    const idx = posts.findIndex((p) => p._id === post._id);
-    const targetIdx = idx + offset;
-    if (idx === -1 || targetIdx < 0 || targetIdx >= posts.length) return;
-
-    const other = posts[targetIdx];
-    if (post._optimistic || other._optimistic) return;
-
-    // flushSync so a rapid second click reads the result of this one. See
-    // DashboardViewClient for why the duplicate would otherwise cancel out.
-    flushSync(() => {
-      setPosts(swapItemsByIds(posts, post._id, other._id));
+  const sendReorder = useCallback(async ({ postId, toIndex }) => {
+    const res = await fetch("/api/posts/reorder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ postId, toIndex }),
     });
+    if (!res.ok) throw new Error("Failed to reorder posts");
+    return res.json();
+  }, []);
 
-    const toIndex = targetIdx + 1;
-    const seq = ++reorderSeqRef.current;
+  const flushPendingReorder = useCallback(() => {
+    reorderTimerRef.current = null;
+    const pending = pendingReorderRef.current;
+    pendingReorderRef.current = null;
+    if (!pending) {
+      setIsReorderPending(false);
+      return;
+    }
 
     enqueue({
       type: "update",
@@ -298,16 +307,13 @@ export default function PageViewClient({ user, page, initialPosts }) {
       // The rollback resyncs from the server rather than restoring a snapshot.
       rollsBackLocally: false,
       fn: async () => {
-        const res = await fetch("/api/posts/reorder", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ postId: post._id, toIndex }),
-        });
-        if (!res.ok) throw new Error("Failed to reorder posts");
+        // Guard on both sides of the request: a newer click may have arrived
+        // while this op waited its turn, and again while it was in flight.
+        if (pending.seq !== reorderSeqRef.current) return;
 
-        const { ordering } = await res.json();
-        // Superseded by a later click — its response will settle the order.
-        if (seq !== reorderSeqRef.current || !Array.isArray(ordering)) return;
+        const { ordering } = await sendReorder(pending);
+
+        if (pending.seq !== reorderSeqRef.current || !Array.isArray(ordering)) return;
 
         const indexById = new Map(
           ordering.map((entry) => [entry._id, entry.order_index]),
@@ -328,6 +334,55 @@ export default function PageViewClient({ user, page, initialPosts }) {
         refreshWithScrollRestore();
       },
     });
+
+    setIsReorderPending(false);
+  }, [enqueue, refreshWithScrollRestore, sendReorder]);
+
+  // A move made in the last 300ms before navigating away is still a move.
+  useEffect(
+    () => () => {
+      if (!reorderTimerRef.current) return;
+      clearTimeout(reorderTimerRef.current);
+      const pending = pendingReorderRef.current;
+      pendingReorderRef.current = null;
+      if (!pending) return;
+      fetch("/api/posts/reorder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ postId: pending.postId, toIndex: pending.toIndex }),
+        keepalive: true,
+      }).catch(() => {});
+    },
+    [],
+  );
+
+  function moveByOffset(post, offset) {
+    const idx = posts.findIndex((p) => p._id === post._id);
+    const targetIdx = idx + offset;
+    if (idx === -1 || targetIdx < 0 || targetIdx >= posts.length) return;
+
+    const other = posts[targetIdx];
+    if (post._optimistic || other._optimistic) return;
+
+    flip.capture();
+
+    // flushSync so a rapid second click reads the result of this one. See
+    // DashboardViewClient for why the duplicate would otherwise cancel out.
+    flushSync(() => {
+      setPosts(swapItemsByIds(posts, post._id, other._id));
+    });
+
+    flip.play();
+
+    pendingReorderRef.current = {
+      postId: post._id,
+      toIndex: targetIdx + 1,
+      seq: ++reorderSeqRef.current,
+    };
+    setIsReorderPending(true);
+
+    if (reorderTimerRef.current) clearTimeout(reorderTimerRef.current);
+    reorderTimerRef.current = setTimeout(flushPendingReorder, REORDER_DEBOUNCE_MS);
   }
 
   function handleMoveLeft(post) {
@@ -387,7 +442,7 @@ export default function PageViewClient({ user, page, initialPosts }) {
           >
             {isOwner && (
               <>
-                {isSyncing && (
+                {(isSyncing || isReorderPending) && (
                   <span className="text-white/60 text-xs hidden sm:block">
                     Saving...
                   </span>
@@ -443,7 +498,10 @@ export default function PageViewClient({ user, page, initialPosts }) {
           {posts.length === 0 && !isEditMode && (
             <p className="text-neutral-500 text-center py-12">No posts yet.</p>
           )}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-[7px] sm:gap-4">
+          <div
+            ref={gridRef}
+            className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-[7px] sm:gap-4"
+          >
             {posts.map((post, idx) => (
               <PostCard
                 key={post._id}

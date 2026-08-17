@@ -13,7 +13,7 @@ import {
 import RichTextEditorFallback, {
   RICH_TEXT_EDITOR_FRAME_HEIGHT_CLASS,
 } from '@/components/page/RichTextEditorFallback';
-import Modal from '@/components/Modal';
+import Modal, { useModalExit } from '@/components/Modal';
 import UploadProgressBar from '@/components/UploadProgressBar';
 import { useToast } from '@/context/ToastContext';
 import { clampOrderIndex } from '@/lib/ordering';
@@ -59,6 +59,9 @@ function getFilenameFromUrl(url) {
 }
 
 export default function EditPostModal({ post, page, itemCount, onClose, onSave }) {
+  // The exit animation needs the modal on screen a moment longer than the
+  // parent would keep it, so every close goes through requestClose.
+  const { isClosing, requestClose } = useModalExit(onClose);
   const [title, setTitle] = useState(post.title || '');
   const [description, setDescription] = useState(post.description || '');
   const [contentType, setContentType] = useState(post.content_type || 'photo');
@@ -288,7 +291,7 @@ export default function EditPostModal({ post, page, itemCount, onClose, onSave }
       }
 
       await onSave(updates);
-      onClose();
+      requestClose();
     } catch (err) {
       // The modal stays open with the form intact, and any file that already
       // reached R2 is remembered, so "Update Post" resumes.
@@ -341,7 +344,8 @@ export default function EditPostModal({ post, page, itemCount, onClose, onSave }
 
   return (
     <Modal
-      onClose={onClose}
+      onClose={requestClose}
+      isClosing={isClosing}
       ariaLabel={TAB_LABELS[contentType] || TAB_LABELS.file}
       backdropClassName="fixed inset-0 z-[200] bg-black/20 flex items-center justify-center p-4"
       className="bg-neutral-900/90 backdrop-blur-[4px] border border-white/[0.08] rounded-[5px] p-6 w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl shadow-black/50"
@@ -377,7 +381,7 @@ export default function EditPostModal({ post, page, itemCount, onClose, onSave }
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className="flex items-center gap-1.5 py-1.5 px-2.5 rounded-[2px] bg-white/[0.06] hover:bg-white/12 active:bg-white/15 text-white/50 hover:text-white/90 transition-all duration-150"
           >
             <X className="w-4 h-4" />
@@ -556,7 +560,7 @@ export default function EditPostModal({ post, page, itemCount, onClose, onSave }
       <div className="flex gap-3 pt-4 mt-auto flex-shrink-0">
         <button
           type="button"
-          onClick={onClose}
+          onClick={requestClose}
           className="flex-1 py-2.5 rounded-[3px] bg-white/[0.04] border border-white/[0.08] text-white/50 font-medium hover:bg-white/[0.08] hover:border-white/15 hover:text-white/70 active:bg-white/12 transition-all duration-150"
         >
           Cancel

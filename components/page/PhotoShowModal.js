@@ -9,7 +9,7 @@ import {
   Download,
   FileText,
 } from "lucide-react";
-import Modal from "@/components/Modal";
+import Modal, { useModalExit } from "@/components/Modal";
 import {
   CARD_IMAGE_WIDTH,
   FULL_IMAGE_WIDTH,
@@ -28,6 +28,9 @@ export default function PhotoShowModal({
   onClose,
   onNavigate,
 }) {
+  // The exit animation needs the modal on screen a moment longer than the
+  // parent would keep it, so every close goes through requestClose.
+  const { isClosing, requestClose } = useModalExit(onClose);
   const [isLoaded, setIsLoaded] = useState(false);
   const [thumbnailLoaded, setThumbnailLoaded] = useState(false);
   const renderedDescription = useMemo(
@@ -237,7 +240,8 @@ export default function PhotoShowModal({
 
   return (
     <Modal
-      onClose={onClose}
+      onClose={requestClose}
+      isClosing={isClosing}
       ariaLabel="Image lightbox"
       backdropClassName="fixed inset-0 z-[220] bg-black/35 backdrop-blur-[1px] flex items-center justify-center p-2 sm:p-4"
       className="p-0 rounded-lg shadow-2xl overflow-hidden w-[95vw] md:w-[80vw] max-w-none md:max-w-5xl h-full max-h-[80vh] bg-neutral-900 border border-neutral-800 text-neutral-100"
@@ -283,7 +287,7 @@ export default function PhotoShowModal({
             )}
             <button
               type="button"
-              onClick={onClose}
+              onClick={requestClose}
               className="flex items-center ml-[10px] focus:outline-none space-x-2 px-2 py-1 text-sm text-neutral-400 bg-neutral-800 hover:bg-neutral-700 rounded-[3px] transition-all border border-neutral-700"
             >
               <p>Close</p>

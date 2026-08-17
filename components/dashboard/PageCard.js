@@ -41,6 +41,9 @@ export default function PageCard({
 
   return (
     <div
+      // useFlipReorder finds the cards by this. An attribute rather than a
+      // wrapper element, so the grid layout is unchanged.
+      data-flip-key={page._id}
       className={`group relative transition-opacity duration-300 ${isOptimistic ? "opacity-75" : "opacity-100"}`}
       onMouseLeave={() => setDeletePrime(false)}
     >
