@@ -47,15 +47,32 @@ export default function BulkUploadModal({
     };
   }, []);
 
+  // The state initialiser above already built items for initialFiles; running
+  // makeUploadItem again on mount would create a second set of object URLs and
+  // orphan the first.
+  const initialFilesRef = useRef(initialFiles);
   useEffect(() => {
-    setFiles((initialFiles || []).map(makeUploadItem));
+    if (initialFilesRef.current === initialFiles) return;
+    initialFilesRef.current = initialFiles;
+    setFiles((prev) => {
+      prev.forEach((item) => URL.revokeObjectURL(item.preview));
+      return (initialFiles || []).map(makeUploadItem);
+    });
   }, [initialFiles]);
 
+  // Revoke on unmount only, reading through a ref. Depending on `files` ran the
+  // cleanup on every change to the array, revoking the previous array's URLs —
+  // most of which the new array still uses, so earlier thumbnails went blank as
+  // soon as more images were added.
+  const filesRef = useRef(files);
+  useEffect(() => {
+    filesRef.current = files;
+  }, [files]);
   useEffect(
     () => () => {
-      files.forEach((item) => URL.revokeObjectURL(item.preview));
+      filesRef.current.forEach((item) => URL.revokeObjectURL(item.preview));
     },
-    [files],
+    [],
   );
 
   const fileCountLabel = useMemo(

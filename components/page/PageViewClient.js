@@ -7,6 +7,7 @@ import { Plus, Edit2, Eye, LogOut, ArrowLeft } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
+import { mutationFailureDetail, useToast } from "@/context/ToastContext";
 import { mergeServerAndOptimistic } from "@/lib/optimisticMerge";
 import { reorderItemsByIndex, swapItemsByIds } from "@/lib/ordering";
 import { useQueue } from "@/lib/useQueue";
@@ -30,6 +31,10 @@ export default function PageViewClient({ user, page, initialPosts }) {
   const scrollRestorePosRef = useRef(null);
   const refreshWithScrollRestore = useCallback(() => {
     if (typeof window === "undefined") return;
+    // Offline, the RSC refresh fails and the App Router falls back to a full
+    // browser navigation — which lands on the browser's offline page and takes
+    // the failure message with it. Nothing has changed on the server anyway.
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return;
     scrollRestorePosRef.current = window.scrollY;
     if ("scrollRestoration" in window.history) {
       window.history.scrollRestoration = "manual";
@@ -39,7 +44,19 @@ export default function PageViewClient({ user, page, initialPosts }) {
   const handleQueueIdle = useCallback(async () => {
     refreshWithScrollRestore();
   }, [refreshWithScrollRestore]);
-  const { enqueue, isSyncing } = useQueue(handleQueueIdle);
+  const { showError } = useToast();
+  // A rolled-back change the user was not told about is indistinguishable
+  // from losing their work.
+  const handleQueueError = useCallback(
+    (error, op) => {
+      showError(
+        op?.description || "Something didn't save.",
+        mutationFailureDetail({ rolledBack: op?.rollsBackLocally !== false }),
+      );
+    },
+    [showError],
+  );
+  const { enqueue, isSyncing } = useQueue(handleQueueIdle, handleQueueError);
 
   const isOwner = sessionUser?.usernameTag === user.usernameTag;
   const [isEditMode, setIsEditMode] = useState(false);
@@ -147,6 +164,7 @@ export default function PageViewClient({ user, page, initialPosts }) {
 
       enqueue({
         type: "create",
+        description: "Couldn't save your new post",
         fn: async () => {
           const res = await fetch(`/api/posts?pageId=${page._id}`, {
             method: "POST",
@@ -202,6 +220,7 @@ export default function PageViewClient({ user, page, initialPosts }) {
 
     enqueue({
       type: "update",
+      description: "Couldn't save your changes to that post",
       fn: async () => {
         const res = await fetch(`/api/posts/${postId}`, {
           method: "PATCH",
@@ -232,6 +251,7 @@ export default function PageViewClient({ user, page, initialPosts }) {
 
     enqueue({
       type: "delete",
+      description: `Couldn't delete "${post.title || "that post"}"`,
       fn: async () => {
         const res = await fetch(`/api/posts/${post._id}`, { method: "DELETE" });
         if (!res.ok) throw new Error("Failed to delete post");
@@ -271,6 +291,9 @@ export default function PageViewClient({ user, page, initialPosts }) {
 
     enqueue({
       type: "update",
+      description: "Couldn't save the new post order",
+      // The rollback resyncs from the server rather than restoring a snapshot.
+      rollsBackLocally: false,
       fn: async () => {
         const res = await fetch("/api/posts/reorder", {
           method: "POST",

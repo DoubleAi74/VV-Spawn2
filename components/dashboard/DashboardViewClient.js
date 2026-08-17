@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
+import { mutationFailureDetail, useToast } from "@/context/ToastContext";
 import { mergeServerAndOptimistic } from "@/lib/optimisticMerge";
 import { reorderItemsByIndex, swapItemsByIds } from "@/lib/ordering";
 import { useQueue } from "@/lib/useQueue";
@@ -23,6 +24,10 @@ export default function DashboardViewClient({ user, initialPages }) {
   const scrollRestorePosRef = useRef(null);
   const refreshWithScrollRestore = useCallback(() => {
     if (typeof window === "undefined") return;
+    // Offline, the RSC refresh fails and the App Router falls back to a full
+    // browser navigation — which lands on the browser's offline page and takes
+    // the failure message with it. Nothing has changed on the server anyway.
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return;
     scrollRestorePosRef.current = window.scrollY;
     if ("scrollRestoration" in window.history) {
       window.history.scrollRestoration = "manual";
@@ -32,7 +37,19 @@ export default function DashboardViewClient({ user, initialPages }) {
   const handleQueueIdle = useCallback(async () => {
     refreshWithScrollRestore();
   }, [refreshWithScrollRestore]);
-  const { enqueue, isSyncing } = useQueue(handleQueueIdle);
+  const { showError } = useToast();
+  // A rolled-back change the user was not told about is indistinguishable
+  // from losing their work.
+  const handleQueueError = useCallback(
+    (error, op) => {
+      showError(
+        op?.description || "Something didn't save.",
+        mutationFailureDetail({ rolledBack: op?.rollsBackLocally !== false }),
+      );
+    },
+    [showError],
+  );
+  const { enqueue, isSyncing } = useQueue(handleQueueIdle, handleQueueError);
 
   const isOwner = sessionUser?.usernameTag === user.usernameTag;
   const [isEditMode, setIsEditMode] = useState(false);
@@ -63,11 +80,14 @@ export default function DashboardViewClient({ user, initialPages }) {
 
   // ── Info text ──
   async function handleSaveInfo(infoText) {
-    await fetch("/api/user/dashboard", {
+    const res = await fetch("/api/user/dashboard", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ infoText }),
     });
+    // The editor reports a rejected save in its own status line. Without this
+    // check a failed request still read as "Saved".
+    if (!res.ok) throw new Error("Failed to save dashboard info");
   }
 
   // ── Create page ──
@@ -84,6 +104,7 @@ export default function DashboardViewClient({ user, initialPages }) {
 
       enqueue({
         type: "create",
+        description: "Couldn't create your new page",
         fn: async () => {
           const res = await fetch("/api/pages", {
             method: "POST",
@@ -117,6 +138,7 @@ export default function DashboardViewClient({ user, initialPages }) {
 
     enqueue({
       type: "update",
+      description: "Couldn't save your changes to that page",
       fn: async () => {
         const res = await fetch(`/api/pages/${pageId}`, {
           method: "PATCH",
@@ -152,6 +174,7 @@ export default function DashboardViewClient({ user, initialPages }) {
 
     enqueue({
       type: "delete",
+      description: `Couldn't delete "${page.title || "that page"}"`,
       fn: async () => {
         const res = await fetch(`/api/pages/${page._id}`, { method: "DELETE" });
         if (!res.ok) throw new Error("Failed to delete page");
@@ -197,6 +220,9 @@ export default function DashboardViewClient({ user, initialPages }) {
 
     enqueue({
       type: "update",
+      description: "Couldn't save the new page order",
+      // The rollback resyncs from the server rather than restoring a snapshot.
+      rollsBackLocally: false,
       fn: async () => {
         const res = await fetch("/api/pages/reorder", {
           method: "POST",

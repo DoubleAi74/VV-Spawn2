@@ -1,5 +1,6 @@
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
+import { ToastProvider } from "@/context/ToastContext";
 
 export const metadata = {
   title: "Volvox Works",
@@ -34,7 +35,9 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en" className="bg-black">
       <body className="bg-black">
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <ToastProvider>{children}</ToastProvider>
+        </AuthProvider>
       </body>
     </html>
   );
