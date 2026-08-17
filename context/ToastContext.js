@@ -76,15 +76,18 @@ export function ToastProvider({ children }) {
   }, []);
 
   const showToast = useCallback(
-    (message, { tone = "info", detail = "" } = {}) => {
+    (message, { tone = "info", detail = "", action = null } = {}) => {
       if (!message) return null;
       const id = ++nextId.current;
 
-      setToasts((current) => [...current, { id, tone, message, detail }]);
-      timers.current.set(
-        id,
-        setTimeout(() => dismissToast(id), DISMISS_AFTER[tone] || DISMISS_AFTER.info)
-      );
+      setToasts((current) => [...current, { id, tone, message, detail, action }]);
+      // A toast offering an action must not vanish before it can be taken.
+      if (!action) {
+        timers.current.set(
+          id,
+          setTimeout(() => dismissToast(id), DISMISS_AFTER[tone] || DISMISS_AFTER.info)
+        );
+      }
 
       return id;
     },
@@ -92,7 +95,8 @@ export function ToastProvider({ children }) {
   );
 
   const showError = useCallback(
-    (message, detail) => showToast(message, { tone: "error", detail }),
+    (message, detail, options = {}) =>
+      showToast(message, { tone: "error", detail, ...options }),
     [showToast]
   );
 
@@ -151,6 +155,18 @@ function Toast({ toast, onDismiss }) {
         <p className="text-sm font-medium leading-snug">{toast.message}</p>
         {toast.detail ? (
           <p className="mt-1 text-xs leading-snug opacity-70">{toast.detail}</p>
+        ) : null}
+        {toast.action ? (
+          <button
+            type="button"
+            onClick={() => {
+              onDismiss(toast.id);
+              toast.action.onAction?.();
+            }}
+            className="mt-2 rounded-[3px] border border-current/30 bg-white/10 px-2.5 py-1 text-xs font-medium transition-colors hover:bg-white/20"
+          >
+            {toast.action.label}
+          </button>
         ) : null}
       </div>
       <button

@@ -14,8 +14,11 @@ import RichTextEditorFallback, {
   RICH_TEXT_EDITOR_FRAME_HEIGHT_CLASS,
 } from '@/components/page/RichTextEditorFallback';
 import Modal from '@/components/Modal';
+import UploadProgressBar from '@/components/UploadProgressBar';
+import { useToast } from '@/context/ToastContext';
 import { clampOrderIndex } from '@/lib/ordering';
 import { processImageForUpload, fetchServerBlur } from '@/lib/processImage';
+import { uploadToStorage, useUploadedOnce } from '@/lib/uploadFile';
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024;
 
@@ -69,6 +72,10 @@ export default function EditPostModal({ post, page, itemCount, onClose, onSave }
   );
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(null);
+  const { showError } = useToast();
+  // A failed save must not re-upload files that already landed.
+  const { uploadOnce } = useUploadedOnce();
 
   const imageRef = useRef(null);
   const fileRef = useRef(null);
@@ -142,79 +149,58 @@ export default function EditPostModal({ post, page, itemCount, onClose, onSave }
   }
 
   async function uploadPhoto(nextFile) {
-    const { file: compressed, blurDataURL: clientBlur, needsServerBlur } = await processImageForUpload(nextFile);
-    const contentType = compressed.type || 'image/jpeg';
-    const presignRes = await fetch('/api/storage/upload', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        filename: compressed.name,
-        contentType,
+    return uploadOnce(nextFile, async () => {
+      const { file: compressed, blurDataURL: clientBlur, needsServerBlur } =
+        await processImageForUpload(nextFile);
+      const contentType = compressed.type || 'image/jpeg';
+      const publicUrl = await uploadToStorage({
         kind: 'photo',
         pageId: page._id,
-        fileSize: compressed.size,
-      }),
+        body: compressed,
+        filename: compressed.name,
+        contentType,
+        onProgress: setProgress,
+      });
+      const blurDataURL = needsServerBlur ? await fetchServerBlur(publicUrl) : clientBlur;
+      return { content: publicUrl, thumbnail: publicUrl, blurDataURL };
     });
-    if (!presignRes.ok) throw new Error('Failed to get upload URL');
-    const { signedUrl, publicUrl } = await presignRes.json();
-    await fetch(signedUrl, {
-      method: 'PUT',
-      body: compressed,
-      headers: { 'Content-Type': contentType },
-    });
-    const blurDataURL = needsServerBlur ? await fetchServerBlur(publicUrl) : clientBlur;
-    return { content: publicUrl, thumbnail: publicUrl, blurDataURL };
   }
 
   async function uploadFile(nextFile) {
-    const presignRes = await fetch('/api/storage/upload', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        filename: nextFile.name,
-        contentType: nextFile.type || 'application/octet-stream',
+    return uploadOnce(nextFile, async () => {
+      const contentType = nextFile.type || 'application/octet-stream';
+      const publicUrl = await uploadToStorage({
         kind: 'file',
         pageId: page._id,
-        fileSize: nextFile.size,
-      }),
+        body: nextFile,
+        filename: nextFile.name,
+        contentType,
+        onProgress: setProgress,
+      });
+      return { content: publicUrl };
     });
-    if (!presignRes.ok) throw new Error('Failed to get upload URL');
-    const { signedUrl, publicUrl } = await presignRes.json();
-    await fetch(signedUrl, {
-      method: 'PUT',
-      body: nextFile,
-      headers: { 'Content-Type': nextFile.type || 'application/octet-stream' },
-    });
-    return { content: publicUrl };
   }
 
   async function uploadThumbnail(nextFile) {
-    const { file: compressed, blurDataURL: clientBlur, needsServerBlur } = await processImageForUpload(nextFile);
-    const contentType = compressed.type || 'image/jpeg';
-    const presignRes = await fetch('/api/storage/upload', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        filename: compressed.name,
-        contentType,
+    return uploadOnce(nextFile, async () => {
+      const { file: compressed, blurDataURL: clientBlur, needsServerBlur } =
+        await processImageForUpload(nextFile);
+      const contentType = compressed.type || 'image/jpeg';
+      const publicUrl = await uploadToStorage({
         kind: 'photo',
         pageId: page._id,
-        fileSize: compressed.size,
-      }),
+        body: compressed,
+        filename: compressed.name,
+        contentType,
+        onProgress: setProgress,
+      });
+      const blurDataURL = needsServerBlur ? await fetchServerBlur(publicUrl) : clientBlur;
+      return { thumbnail: publicUrl, blurDataURL };
     });
-    if (!presignRes.ok) throw new Error('Failed to get upload URL');
-    const { signedUrl, publicUrl } = await presignRes.json();
-    await fetch(signedUrl, {
-      method: 'PUT',
-      body: compressed,
-      headers: { 'Content-Type': contentType },
-    });
-    const blurDataURL = needsServerBlur ? await fetchServerBlur(publicUrl) : clientBlur;
-    return { thumbnail: publicUrl, blurDataURL };
   }
 
   async function handleSubmit(e) {
-    e.preventDefault();
+    e?.preventDefault?.();
     setError('');
     setLoading(true);
 
@@ -304,8 +290,14 @@ export default function EditPostModal({ post, page, itemCount, onClose, onSave }
       await onSave(updates);
       onClose();
     } catch (err) {
+      // The modal stays open with the form intact, and any file that already
+      // reached R2 is remembered, so "Update Post" resumes.
       setError(err.message || 'Something went wrong');
+      showError("Couldn't save that post", err.message || 'The upload did not finish.', {
+        action: { label: 'Try again', onAction: () => handleSubmit(e) },
+      });
     } finally {
+      setProgress(null);
       setLoading(false);
     }
   }
@@ -558,6 +550,8 @@ export default function EditPostModal({ post, page, itemCount, onClose, onSave }
           </div>
         </form>
       </div>
+
+      <UploadProgressBar value={progress} label="Uploading" />
 
       <div className="flex gap-3 pt-4 mt-auto flex-shrink-0">
         <button

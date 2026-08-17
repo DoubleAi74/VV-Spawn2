@@ -3,9 +3,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { X, Upload, Image as ImageIcon } from 'lucide-react';
 import Modal from '@/components/Modal';
+import UploadProgressBar from '@/components/UploadProgressBar';
+import { useToast } from '@/context/ToastContext';
 import { clampOrderIndex } from '@/lib/ordering';
 import { processImageForUpload, fetchServerBlur } from '@/lib/processImage';
 import { toBaseSlug } from '@/lib/slug';
+import { uploadToStorage, useUploadedOnce } from '@/lib/uploadFile';
 
 export default function EditPageModal({ page, itemCount, onClose, onSave }) {
   const [title, setTitle] = useState(page.title || '');
@@ -18,7 +21,11 @@ export default function EditPageModal({ page, itemCount, onClose, onSave }) {
   const [thumbnailPreview, setThumbnailPreview] = useState(page.thumbnail || '');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(null);
   const fileRef = useRef(null);
+  const { showError } = useToast();
+  // A failed save must not re-upload a thumbnail that already landed.
+  const { uploadOnce } = useUploadedOnce();
 
   useEffect(() => {
     setTitle(page.title || '');
@@ -42,7 +49,7 @@ export default function EditPageModal({ page, itemCount, onClose, onSave }) {
   }
 
   async function handleSubmit(e) {
-    e.preventDefault();
+    e?.preventDefault?.();
     if (!title.trim()) {
       setError('Page title is required');
       return;
@@ -55,38 +62,35 @@ export default function EditPageModal({ page, itemCount, onClose, onSave }) {
       let blurDataURL = page.blurDataURL;
 
       if (thumbnailFile) {
-        const { file: compressed, blurDataURL: clientBlur, needsServerBlur } = await processImageForUpload(thumbnailFile);
-        const contentType = compressed.type || 'image/jpeg';
-
-        const presignRes = await fetch('/api/storage/upload', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+        const uploaded = await uploadOnce(thumbnailFile, async () => {
+          const { file: compressed, blurDataURL: clientBlur, needsServerBlur } =
+            await processImageForUpload(thumbnailFile);
+          const contentType = compressed.type || 'image/jpeg';
+          const publicUrl = await uploadToStorage({
+            kind: 'page-thumbnail',
+            body: compressed,
             filename: compressed.name,
             contentType,
-            kind: 'page-thumbnail',
-            fileSize: compressed.size,
-          }),
+            onProgress: setProgress,
+          });
+
+          // Only once the replacement is safely stored.
+          if (page.thumbnail) {
+            await fetch('/api/storage/delete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fileUrl: page.thumbnail }),
+            }).catch(() => {});
+          }
+
+          return {
+            thumbnail: publicUrl,
+            blurDataURL: needsServerBlur ? await fetchServerBlur(publicUrl) : clientBlur,
+          };
         });
-        if (!presignRes.ok) throw new Error('Failed to get upload URL');
-        const { signedUrl, publicUrl } = await presignRes.json();
 
-        await fetch(signedUrl, {
-          method: 'PUT',
-          body: compressed,
-          headers: { 'Content-Type': contentType },
-        });
-
-        if (page.thumbnail) {
-          await fetch('/api/storage/delete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fileUrl: page.thumbnail }),
-          }).catch(() => {});
-        }
-
-        thumbnail = publicUrl;
-        blurDataURL = needsServerBlur ? await fetchServerBlur(publicUrl) : clientBlur;
+        thumbnail = uploaded.thumbnail;
+        blurDataURL = uploaded.blurDataURL;
       }
 
       await onSave({
@@ -103,8 +107,14 @@ export default function EditPageModal({ page, itemCount, onClose, onSave }) {
       });
       onClose();
     } catch (err) {
+      // The modal stays open with the form intact, and a thumbnail that already
+      // uploaded is remembered, so retrying resumes rather than restarting.
       setError(err.message || 'Something went wrong');
+      showError("Couldn't save that page", err.message || 'The upload did not finish.', {
+        action: { label: 'Try again', onAction: () => handleSubmit(e) },
+      });
     } finally {
+      setProgress(null);
       setLoading(false);
     }
   }
@@ -286,6 +296,8 @@ export default function EditPageModal({ page, itemCount, onClose, onSave }) {
             </div>
           </div>
         </div>
+
+        <UploadProgressBar value={progress} label="Uploading thumbnail" />
 
         <div className="flex gap-3 pt-4">
           <button

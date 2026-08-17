@@ -3,8 +3,11 @@
 import { useRef, useState } from 'react';
 import { X, Upload, Image as ImageIcon } from 'lucide-react';
 import Modal from '@/components/Modal';
+import UploadProgressBar from '@/components/UploadProgressBar';
+import { useToast } from '@/context/ToastContext';
 import { processImageForUpload, fetchServerBlur } from '@/lib/processImage';
 import { toBaseSlug } from '@/lib/slug';
+import { uploadToStorage, useUploadedOnce } from '@/lib/uploadFile';
 
 export default function CreatePageModal({ onClose, onCreate }) {
   const [title, setTitle] = useState('');
@@ -16,7 +19,11 @@ export default function CreatePageModal({ onClose, onCreate }) {
   const [thumbnailPreview, setThumbnailPreview] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(null);
   const fileRef = useRef(null);
+  const { showError } = useToast();
+  // A failed create must not re-upload a thumbnail that already landed.
+  const { uploadOnce } = useUploadedOnce();
 
   function handleFileChange(e) {
     const file = e.target.files?.[0];
@@ -29,7 +36,7 @@ export default function CreatePageModal({ onClose, onCreate }) {
   }
 
   async function handleSubmit(e) {
-    e.preventDefault();
+    e?.preventDefault?.();
     if (!title.trim()) {
       setError('Page title is required');
       return;
@@ -42,40 +49,42 @@ export default function CreatePageModal({ onClose, onCreate }) {
     setLoading(true);
 
     try {
-      const { file: compressed, blurDataURL: clientBlur, needsServerBlur } = await processImageForUpload(thumbnailFile);
-      const contentType = compressed.type || 'image/jpeg';
-      const presignRes = await fetch('/api/storage/upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const uploaded = await uploadOnce(thumbnailFile, async () => {
+        const { file: compressed, blurDataURL: clientBlur, needsServerBlur } =
+          await processImageForUpload(thumbnailFile);
+        const contentType = compressed.type || 'image/jpeg';
+        const publicUrl = await uploadToStorage({
+          kind: 'page-thumbnail',
+          body: compressed,
           filename: compressed.name,
           contentType,
-          kind: 'page-thumbnail',
-          fileSize: compressed.size,
-        }),
-      });
-      if (!presignRes.ok) throw new Error('Failed to get upload URL');
-      const { signedUrl, publicUrl } = await presignRes.json();
-
-      await fetch(signedUrl, {
-        method: 'PUT',
-        body: compressed,
-        headers: { 'Content-Type': contentType },
+          onProgress: setProgress,
+        });
+        return {
+          thumbnail: publicUrl,
+          blurDataURL: needsServerBlur ? await fetchServerBlur(publicUrl) : clientBlur,
+        };
       });
 
-      const blurDataURL = needsServerBlur ? await fetchServerBlur(publicUrl) : clientBlur;
       await onCreate({
         title: title.trim(),
         description: subtitle.trim(),
         ...(slugTouched && slug.trim() ? { slug: slug.trim() } : {}),
         isPrivate,
-        thumbnail: publicUrl,
-        blurDataURL,
+        thumbnail: uploaded.thumbnail,
+        blurDataURL: uploaded.blurDataURL,
       });
       onClose();
     } catch (err) {
+      // The modal stays open with everything the user typed still in it, and
+      // the upload that succeeded is remembered, so "Create Page" resumes
+      // rather than starting again.
       setError(err.message || 'Something went wrong');
+      showError("Couldn't create the page", err.message || 'The upload did not finish.', {
+        action: { label: 'Try again', onAction: () => handleSubmit(e) },
+      });
     } finally {
+      setProgress(null);
       setLoading(false);
     }
   }
@@ -239,6 +248,8 @@ export default function CreatePageModal({ onClose, onCreate }) {
             </div>
           </div>
         </div>
+
+        <UploadProgressBar value={progress} label="Uploading thumbnail" />
 
         <div className="flex gap-3 pt-4">
           <button

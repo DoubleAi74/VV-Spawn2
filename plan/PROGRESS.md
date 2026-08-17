@@ -724,6 +724,99 @@ Stage 4 checks from `STAGES.md`:
 - ✔ Nothing visually regressed: the ten-screenshot set differs from Stage 3 by 0–0.23% of
   pixels, all of it inside image content, none of it in any border, panel, text or colour.
 
+## Stage 5 — Uploads that survive a bad connection
+
+- [x] **UPL-1 — real upload progress.** New `lib/uploadFile.js` wraps `XMLHttpRequest` (which
+  exposes `upload.onprogress`; `fetch` does not) in a promise, and owns presigning, retries and
+  a concurrency pool. `uploadToStorage({ kind, pageId, body, filename, contentType,
+  onProgress })` is what four of the five call sites now use — the presign request itself moved
+  in here, so the SEC-4 contract is written once instead of eight times. New
+  `components/UploadProgressBar.js` renders the determinate bar (`role="progressbar"`,
+  `aria-valuenow`). All five modals converted; **no `signedUrl` or raw `PUT` is left anywhere
+  outside `lib/uploadFile.js`**.
+
+  Verified against real R2 with the upload throttled to 150 kB/s and a deliberately
+  incompressible 6.26 MB image: **93 samples of `aria-valuenow`**, running
+  `0 → 1 → 3 → 4 → … → 98 → 99 → 100`, monotonically non-decreasing, ending at exactly 100.
+  The first attempt at this found the bar was **missing entirely from `CreatePageModal`** — the
+  edit that added it to the other four had not matched there, and only sampling the DOM caught
+  it.
+
+- [x] **UPL-2 — retry with backoff.** Three attempts, 1s then 2s, on network errors and 5xx
+  only. A 4xx is a verdict and is never retried (408 and 429 excepted — those status codes ask
+  to be retried). A presigned URL is reused for retries inside its 15-minute life and
+  re-presigned only past a 13-minute window. Final failure goes through the REL-2 toast, which
+  gained an optional action button; a toast carrying an action does not auto-dismiss.
+
+  Verified through the real modal with the R2 `PUT` intercepted:
+
+  | scenario | PUTs | result |
+  |---|---|---|
+  | 500 on the first attempt only | **2**, 1,013ms apart | upload succeeded, post created |
+  | 500 every time | **3**, gaps 1,011ms and 2,006ms | toast *"Couldn't create the post — The upload kept failing (500)"* with a **Try again** button; modal still open; **no post created** |
+  | 403 every time | **1** | no retry at all |
+
+- [x] **UPL-3 — parallel bulk upload, a size limit, and no silent drops.** Image processing
+  stays sequential (canvas work is main-thread), and the upload phase runs through
+  `runWithConcurrency` with 4 in flight. The batch presign route now enforces the **100 MB
+  per-file limit** the single-upload route always had, and the modal enforces it client-side.
+
+  | | before | after |
+  |---|---|---|
+  | 8-image bulk upload, 300ms RTT | 10,842 ms | **4,989 ms** (2.2×) |
+  | **20-image** bulk upload, 300ms RTT | **27,904 ms** | **9,063 ms** (3.1×) |
+  | peak concurrent PUTs | 1 | 4 |
+
+  Both figures come from the same harness; the "before" was measured with
+  `UPLOAD_CONCURRENCY = 1`, i.e. by running the sequential behaviour, not by reading the old
+  code. Batch route limits verified directly: 1 KB → 200, 99 MB → 200, 101 MB → **400**, one
+  oversize file in an otherwise valid batch → **400**, 51 files → 400, 50 files → 200.
+
+  **Files past the cap are no longer dropped in silence.** Selecting 55 images keeps 50 and
+  says *"Not added: 5 over the 50-image limit for one batch."* The message also covers
+  non-images, files over 100 MB and duplicates.
+
+  A real defect found here: the message was being built **inside a `setFiles` updater**, which
+  React calls twice in development, so it read *"5 over the limit, 5 over the limit"* — and
+  `makeUploadItem` was being called in there too, leaking a second object URL per file on every
+  selection. That is the same class of bug REL-4 fixed. Both moved out of the updater.
+
+- [x] **UPL-4 — completed work survives a failure.** `useUploadedOnce` caches uploads by the
+  `File` object, so a retry after a failed save re-uploads nothing that already landed. The
+  four single-file modals keep their form state and stay open on failure. The bulk modal marks
+  each file done/failed, keeps a `deliveredRef` of the posts it has already handed over, and
+  its submit button becomes **"Retry 1 image"**.
+
+  Verified: failing the third of five bulk uploads leaves **4 marked done, 1 marked failed**,
+  the modal open, and **4 posts created** — the successes were not lost. The first pass made 7
+  PUTs (4 successes + 3 attempts on the failure). Pressing retry made **exactly 1 PUT** and left
+  **5 posts in total**, so nothing was duplicated. In the single-post modal, a create that
+  failed three times and was then retried made 1 further PUT and produced exactly one new post.
+
+### All five upload paths, end to end against real R2
+
+On a scratch page created and deleted for the purpose:
+
+| path | result |
+|---|---|
+| **page create** | page created with thumbnail and blur; progress bar sampled 0 → 100 |
+| **page edit** | thumbnail replaced, new file readable (200), **old file deleted (404)** |
+| **post create** | photo post created, `content` and `thumbnail` both readable |
+| **post edit** | photo post switched to a file post, `.txt` uploaded and readable |
+| **bulk** | 3 images → 3 posts, joining the one already there |
+| **cascade** | all 6 stored files 200 before the delete, **all 404 after**, all post rows gone |
+
+### Stage 5 gate
+
+| Check | Result |
+|---|---|
+| `npx next lint` | ✔ No ESLint warnings or errors |
+| `node --test lib/*.test.mjs` | 21 pass, 0 fail |
+| `npm run build` | ✔ compiled successfully |
+| `node scripts/normalize-order.mjs` | 0 corrections |
+| First-load JS | `/[usernameTag]` 136 → **138 kB**, `/[usernameTag]/[pageSlug]` 140 → **143 kB** (the upload helper and progress bar; still 33% below the Stage 0 baseline) |
+| Visual regression vs Stage 4 | 8 of 10 screenshots pixel-identical, 2 within the noise floor |
+
 ## Discovered, not actioned
 
 - **`tailwind.config.js` did not scan `context/`** — found via REL-2, fixed there because the
@@ -752,6 +845,18 @@ Stage 4 checks from `STAGES.md`:
   renders when the viewer is not in edit mode *and* `dashboard.infoText` has visible content,
   and no account has any. Noted because it means that code path is untested by any browser
   check in this run.
+- **Deleting a page while creates are still in flight can orphan a post.** Found in this run's
+  own bulk test: `deletePage` runs `Post.deleteMany({ pageId })`, and a create request that was
+  already queued client-side inserts afterwards, leaving a post row whose page no longer exists
+  and an R2 object nothing will ever collect. One such row was produced by a 20-image test and
+  has been cleaned up (dry run shown, then applied; the object is now 404 and the sweep reports
+  0 orphans). The window is small and needs a delete racing an in-flight create, but it is real
+  and it is in the app, not only in the test — a user who deletes a page mid-upload can hit it.
+  A `userId` on `Post` (**CLN-3**) plus an orphan sweep in `scripts/` would close it; Stage 9 is
+  the natural home.
+- **`javascript-creations` holds 30 posts** — the largest page in the database and a useful
+  target for the PERF-1 measurement if it is repeated later; the pages measured in Stage 4 have
+  6–8.
 
 ## Decisions and deviations
 

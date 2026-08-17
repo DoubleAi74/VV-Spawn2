@@ -6,6 +6,9 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { NextResponse } from 'next/server';
 
 const MAX_BATCH_SIZE = 50;
+// The single-upload route has always enforced this; the batch route did not,
+// so fifty files of any size could be presigned in one request.
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 
 export async function POST(request) {
   const session = await auth();
@@ -46,6 +49,14 @@ export async function POST(request) {
   const rejected = files.find((file) => !isAllowedContentType(kind, file?.contentType));
   if (rejected) {
     return NextResponse.json({ error: 'Unsupported file type' }, { status: 400 });
+  }
+
+  const oversized = files.find((file) => Number(file?.fileSize) > MAX_FILE_SIZE);
+  if (oversized) {
+    return NextResponse.json(
+      { error: 'File exceeds the 100 MB maximum size limit' },
+      { status: 400 }
+    );
   }
 
   const urls = await Promise.all(
