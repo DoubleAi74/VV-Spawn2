@@ -11,8 +11,6 @@ import { mutationFailureDetail, useToast } from "@/context/ToastContext";
 import { mergeServerAndOptimistic } from "@/lib/optimisticMerge";
 import { reorderItemsByIndex, swapItemsByIds } from "@/lib/ordering";
 import { useQueue } from "@/lib/useQueue";
-import { useFlipReorder } from "@/lib/useFlipReorder";
-import { REORDER_DEBOUNCE_MS } from "@/lib/motion";
 import { setPageSnapshot } from "@/lib/routeTransitionCache";
 import PostCard from "@/components/page/PostCard";
 import PageInfoEditor from "@/components/page/PageInfoEditor";
@@ -271,35 +269,36 @@ export default function PageViewClient({ user, page, initialPosts }) {
   }
 
   // ── Reorder ──
-  // Swap array positions AND renumber order_index together, then adopt only
-  // the newest server response. See DashboardViewClient for the reasoning,
-  // including why the sequence number is bumped on the click rather than when
-  // the debounce fires.
+  // Swap array positions AND renumber order_index together. Moving one without
+  // the other lets the rendered order drift from the stored order, which is
+  // what allowed duplicate indices to build up.
+  //
+  // One request per click, deliberately. Coalescing a burst behind a debounce
+  // needs a pending slot per item; a single shared slot silently drops the
+  // earlier item's move when two different cards are moved in quick
+  // succession, and sends the later one's index computed against an
+  // arrangement the server never received. Per-click requests are chattier and
+  // correct. The sequence guard drops superseded responses so a multi-place
+  // move still settles cleanly.
   const reorderSeqRef = useRef(0);
-  const pendingReorderRef = useRef(null);
-  const reorderTimerRef = useRef(null);
-  const [isReorderPending, setIsReorderPending] = useState(false);
-  const gridRef = useRef(null);
-  const flip = useFlipReorder(gridRef);
 
-  const sendReorder = useCallback(async ({ postId, toIndex }) => {
-    const res = await fetch("/api/posts/reorder", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ postId, toIndex }),
+  function moveByOffset(post, offset) {
+    const idx = posts.findIndex((p) => p._id === post._id);
+    const targetIdx = idx + offset;
+    if (idx === -1 || targetIdx < 0 || targetIdx >= posts.length) return;
+
+    const other = posts[targetIdx];
+    if (post._optimistic || other._optimistic) return;
+
+    // flushSync so a rapid second click reads the result of this one. Without
+    // it React may not have committed yet, both clicks compute the same move,
+    // and the duplicate cancels the first out.
+    flushSync(() => {
+      setPosts(swapItemsByIds(posts, post._id, other._id));
     });
-    if (!res.ok) throw new Error("Failed to reorder posts");
-    return res.json();
-  }, []);
 
-  const flushPendingReorder = useCallback(() => {
-    reorderTimerRef.current = null;
-    const pending = pendingReorderRef.current;
-    pendingReorderRef.current = null;
-    if (!pending) {
-      setIsReorderPending(false);
-      return;
-    }
+    const toIndex = targetIdx + 1;
+    const seq = ++reorderSeqRef.current;
 
     enqueue({
       type: "update",
@@ -307,19 +306,22 @@ export default function PageViewClient({ user, page, initialPosts }) {
       // The rollback resyncs from the server rather than restoring a snapshot.
       rollsBackLocally: false,
       fn: async () => {
-        // Guard on both sides of the request: a newer click may have arrived
-        // while this op waited its turn, and again while it was in flight.
-        if (pending.seq !== reorderSeqRef.current) return;
+        const res = await fetch("/api/posts/reorder", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ postId: post._id, toIndex }),
+        });
+        if (!res.ok) throw new Error("Failed to reorder posts");
 
-        const { ordering } = await sendReorder(pending);
-
-        if (pending.seq !== reorderSeqRef.current || !Array.isArray(ordering)) return;
+        const { ordering } = await res.json();
+        // Superseded by a later click — its response will settle the order.
+        if (seq !== reorderSeqRef.current || !Array.isArray(ordering)) return;
 
         const indexById = new Map(
           ordering.map((entry) => [entry._id, entry.order_index]),
         );
-        setPosts((currentPosts) =>
-          [...currentPosts]
+        setPosts((current) =>
+          [...current]
             .map((p) =>
               indexById.has(p._id)
                 ? { ...p, order_index: indexById.get(p._id) }
@@ -334,55 +336,6 @@ export default function PageViewClient({ user, page, initialPosts }) {
         refreshWithScrollRestore();
       },
     });
-
-    setIsReorderPending(false);
-  }, [enqueue, refreshWithScrollRestore, sendReorder]);
-
-  // A move made in the last 300ms before navigating away is still a move.
-  useEffect(
-    () => () => {
-      if (!reorderTimerRef.current) return;
-      clearTimeout(reorderTimerRef.current);
-      const pending = pendingReorderRef.current;
-      pendingReorderRef.current = null;
-      if (!pending) return;
-      fetch("/api/posts/reorder", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ postId: pending.postId, toIndex: pending.toIndex }),
-        keepalive: true,
-      }).catch(() => {});
-    },
-    [],
-  );
-
-  function moveByOffset(post, offset) {
-    const idx = posts.findIndex((p) => p._id === post._id);
-    const targetIdx = idx + offset;
-    if (idx === -1 || targetIdx < 0 || targetIdx >= posts.length) return;
-
-    const other = posts[targetIdx];
-    if (post._optimistic || other._optimistic) return;
-
-    flip.capture();
-
-    // flushSync so a rapid second click reads the result of this one. See
-    // DashboardViewClient for why the duplicate would otherwise cancel out.
-    flushSync(() => {
-      setPosts(swapItemsByIds(posts, post._id, other._id));
-    });
-
-    flip.play();
-
-    pendingReorderRef.current = {
-      postId: post._id,
-      toIndex: targetIdx + 1,
-      seq: ++reorderSeqRef.current,
-    };
-    setIsReorderPending(true);
-
-    if (reorderTimerRef.current) clearTimeout(reorderTimerRef.current);
-    reorderTimerRef.current = setTimeout(flushPendingReorder, REORDER_DEBOUNCE_MS);
   }
 
   function handleMoveLeft(post) {
@@ -449,7 +402,7 @@ export default function PageViewClient({ user, page, initialPosts }) {
           >
             {isOwner && (
               <>
-                {(isSyncing || isReorderPending) && (
+                {isSyncing && (
                   <span className="text-white/60 text-xs hidden sm:block">
                     Saving...
                   </span>
@@ -506,8 +459,7 @@ export default function PageViewClient({ user, page, initialPosts }) {
             <p className="text-neutral-500 text-center py-12">No posts yet.</p>
           )}
           <div
-            ref={gridRef}
-            className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-[7px] sm:gap-4"
+              className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-[7px] sm:gap-4"
           >
             {posts.map((post, idx) => (
               <PostCard

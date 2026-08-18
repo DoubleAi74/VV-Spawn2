@@ -79,6 +79,23 @@ colour can make the title or the focus ring invisible.
 
 ---
 
+## Reverted after delivery
+
+**MOT-1 (reorder animation) and MOT-5 (reorder coalescing)** were backed out on 18 Aug
+after the owner tested the merged result.
+
+MOT-1 was a preference: the reflow animation was not wanted.
+
+MOT-5 was a defect. The debounce held a single `pendingReorderRef` slot, so a second
+move on a *different* card inside the 300 ms window overwrote the first — the earlier
+card's request was never sent, and the later card's `toIndex` had been computed against
+a local arrangement the server never received. The symptoms were cards snapping back to
+their previous positions, or settling on intermediate ones. Per-click requests are
+restored: chattier, and correct.
+
+Verified with two browser scenarios asserting rendered order equals stored order — two
+different cards 80 ms apart, and one card moved four places 40 ms apart. Both pass.
+
 ## What was abandoned
 
 **MOT-4 — view transitions on navigation.** The only item the plan pre-authorised for

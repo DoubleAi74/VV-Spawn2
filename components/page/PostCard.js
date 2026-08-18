@@ -95,9 +95,6 @@ export default function PostCard({
 
   return (
     <div
-      // useFlipReorder finds the cards by this. An attribute rather than a
-      // wrapper element, so the grid layout is unchanged.
-      data-flip-key={post._id}
       className={`group relative transition-opacity duration-200 ${isOptimistic ? 'opacity-75' : 'opacity-100'}`}
       onPointerLeave={handlePointerLeave}
     >

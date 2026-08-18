@@ -791,6 +791,17 @@ disabling or substantially shortening the animation. Add the media query once, i
 
 ### MOT-1 — Animate the reorder reflow
 
+> **REVERTED after user testing (18 Aug).** MOT-1 and MOT-5 were both backed out.
+> MOT-1's reflow animation was not wanted. MOT-5's debounce kept a *single* pending
+> slot, so moving card A and then card B inside the 300 ms window silently dropped
+> A's request and sent B's target index computed against an arrangement the server
+> never received — cards snapped back, or landed on intermediate positions. Reorder
+> is now one request per click again, which is chattier and correct. **Do not
+> reintroduce either without a pending slot per item and a browser test that moves
+> two different cards inside the debounce window.**
+
+
+
 Cards snap instantly to their new positions when reordered. The ordering logic is
 now correct; this is the half that makes it *feel* correct. Watching a card glide to
 its new position also confirms to the user that the move registered — which is
@@ -868,6 +879,17 @@ supporting browser, and cleanly falls back to the current behaviour elsewhere.
 ---
 
 ### MOT-5 — Coalesce reorder bursts into one request
+
+> **REVERTED after user testing (18 Aug).** MOT-1 and MOT-5 were both backed out.
+> MOT-1's reflow animation was not wanted. MOT-5's debounce kept a *single* pending
+> slot, so moving card A and then card B inside the 300 ms window silently dropped
+> A's request and sent B's target index computed against an arrangement the server
+> never received — cards snapped back, or landed on intermediate positions. Reorder
+> is now one request per click again, which is chattier and correct. **Do not
+> reintroduce either without a pending slot per item and a browser test that moves
+> two different cards inside the debounce window.**
+
+
 
 Moving a card four places currently issues four serial requests. Each is correct and
 idempotent, but it is chatty, and in development each takes several seconds, so the

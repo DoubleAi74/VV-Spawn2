@@ -10,8 +10,6 @@ import { mutationFailureDetail, useToast } from "@/context/ToastContext";
 import { mergeServerAndOptimistic } from "@/lib/optimisticMerge";
 import { reorderItemsByIndex, swapItemsByIds } from "@/lib/ordering";
 import { useQueue } from "@/lib/useQueue";
-import { useFlipReorder } from "@/lib/useFlipReorder";
-import { REORDER_DEBOUNCE_MS } from "@/lib/motion";
 import { focusRingOn } from "@/lib/colour";
 import { setDashboardSnapshot } from "@/lib/routeTransitionCache";
 import DashHeader from "@/components/dashboard/DashHeader";
@@ -202,40 +200,32 @@ export default function DashboardViewClient({ user, initialPages }) {
   // the other lets the rendered order drift from the stored order, which is
   // what allowed duplicate indices to build up.
   //
-  // Every click bumps the sequence number and rewrites the pending target; the
-  // request itself is debounced, so a four-place burst is one write of the
-  // final absolute index rather than four serial writes of intermediate ones.
-  //
-  // The sequence number must be bumped at *click* time, not when the debounce
-  // fires. Bumping it at flush time would leave a window in which a response
-  // from an earlier burst is still the newest sequence and gets applied over
-  // state that already reflects later clicks — which is exactly the stagger
-  // this guard exists to prevent.
+  // One request per click, deliberately. Coalescing a burst behind a debounce
+  // needs a pending slot per item; a single shared slot silently drops the
+  // earlier item's move when two different cards are moved in quick
+  // succession, and sends the later one's index computed against an
+  // arrangement the server never received. Per-click requests are chattier and
+  // correct. The sequence guard drops superseded responses so a multi-place
+  // move still settles cleanly.
   const reorderSeqRef = useRef(0);
-  const pendingReorderRef = useRef(null);
-  const reorderTimerRef = useRef(null);
-  const [isReorderPending, setIsReorderPending] = useState(false);
-  const gridRef = useRef(null);
-  const flip = useFlipReorder(gridRef);
 
-  const sendReorder = useCallback(async ({ pageId, toIndex }) => {
-    const res = await fetch("/api/pages/reorder", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pageId, toIndex }),
+  function moveByOffset(page, offset) {
+    const idx = pages.findIndex((p) => p._id === page._id);
+    const targetIdx = idx + offset;
+    if (idx === -1 || targetIdx < 0 || targetIdx >= pages.length) return;
+
+    const other = pages[targetIdx];
+    if (page._optimistic || other._optimistic) return;
+
+    // flushSync so a rapid second click reads the result of this one. Without
+    // it React may not have committed yet, both clicks compute the same move,
+    // and the duplicate cancels the first out.
+    flushSync(() => {
+      setPages(swapItemsByIds(pages, page._id, other._id));
     });
-    if (!res.ok) throw new Error("Failed to reorder pages");
-    return res.json();
-  }, []);
 
-  const flushPendingReorder = useCallback(() => {
-    reorderTimerRef.current = null;
-    const pending = pendingReorderRef.current;
-    pendingReorderRef.current = null;
-    if (!pending) {
-      setIsReorderPending(false);
-      return;
-    }
+    const toIndex = targetIdx + 1;
+    const seq = ++reorderSeqRef.current;
 
     enqueue({
       type: "update",
@@ -243,22 +233,22 @@ export default function DashboardViewClient({ user, initialPages }) {
       // The rollback resyncs from the server rather than restoring a snapshot.
       rollsBackLocally: false,
       fn: async () => {
-        // Guard before the request as well as after it. Between this op being
-        // queued and it reaching the front, another click may have scheduled a
-        // newer one — sending this would write an order nobody is looking at.
-        if (pending.seq !== reorderSeqRef.current) return;
+        const res = await fetch("/api/pages/reorder", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pageId: page._id, toIndex }),
+        });
+        if (!res.ok) throw new Error("Failed to reorder pages");
 
-        const { ordering } = await sendReorder(pending);
-
-        // And again on the way back: superseded by a later click, whose own
-        // response will settle the order.
-        if (pending.seq !== reorderSeqRef.current || !Array.isArray(ordering)) return;
+        const { ordering } = await res.json();
+        // Superseded by a later click — its response will settle the order.
+        if (seq !== reorderSeqRef.current || !Array.isArray(ordering)) return;
 
         const indexById = new Map(
           ordering.map((entry) => [entry._id, entry.order_index]),
         );
-        setPages((currentPages) =>
-          [...currentPages]
+        setPages((current) =>
+          [...current]
             .map((p) =>
               indexById.has(p._id)
                 ? { ...p, order_index: indexById.get(p._id) }
@@ -273,60 +263,6 @@ export default function DashboardViewClient({ user, initialPages }) {
         refreshWithScrollRestore();
       },
     });
-
-    // enqueue has already set the queue's own syncing flag in this same tick,
-    // so the indicator does not blink between the two.
-    setIsReorderPending(false);
-  }, [enqueue, refreshWithScrollRestore, sendReorder]);
-
-  // A move made in the last 300ms before navigating away is still a move.
-  useEffect(
-    () => () => {
-      if (!reorderTimerRef.current) return;
-      clearTimeout(reorderTimerRef.current);
-      const pending = pendingReorderRef.current;
-      pendingReorderRef.current = null;
-      if (!pending) return;
-      fetch("/api/pages/reorder", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pageId: pending.pageId, toIndex: pending.toIndex }),
-        keepalive: true,
-      }).catch(() => {});
-    },
-    [],
-  );
-
-  function moveByOffset(page, offset) {
-    const idx = pages.findIndex((p) => p._id === page._id);
-    const targetIdx = idx + offset;
-    if (idx === -1 || targetIdx < 0 || targetIdx >= pages.length) return;
-
-    const other = pages[targetIdx];
-    if (page._optimistic || other._optimistic) return;
-
-    // Where the cards are now, before React moves them.
-    flip.capture();
-
-    // flushSync so a rapid second click reads the result of this one. Without
-    // it React may not have committed yet, both clicks compute the same move,
-    // and the duplicate cancels the first out.
-    flushSync(() => {
-      setPages(swapItemsByIds(pages, page._id, other._id));
-    });
-
-    // Where they are now — and the animation back from where they were.
-    flip.play();
-
-    pendingReorderRef.current = {
-      pageId: page._id,
-      toIndex: targetIdx + 1,
-      seq: ++reorderSeqRef.current,
-    };
-    setIsReorderPending(true);
-
-    if (reorderTimerRef.current) clearTimeout(reorderTimerRef.current);
-    reorderTimerRef.current = setTimeout(flushPendingReorder, REORDER_DEBOUNCE_MS);
   }
 
   function handleMoveUp(page) {
@@ -412,7 +348,7 @@ export default function DashboardViewClient({ user, initialPages }) {
           email={user.email}
           isOwner={isOwner}
           isEditMode={isEditMode}
-          statusText={isSyncing || isReorderPending ? "Saving..." : ""}
+          statusText={isSyncing ? "Saving..." : ""}
           onToggleEdit={() => setIsEditMode((m) => !m)}
           onTitleSave={(newTag) => router.replace(`/${newTag}`)}
         />
@@ -424,7 +360,6 @@ export default function DashboardViewClient({ user, initialPages }) {
         )}
 
         <div
-          ref={gridRef}
           className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-[7px] sm:gap-4"
         >
           {visiblePages.map((page, idx) => (
