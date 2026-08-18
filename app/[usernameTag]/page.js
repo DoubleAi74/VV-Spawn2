@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { getPagesByUser, resolveUsernameTag, toPublicUser } from '@/lib/data';
-import { buildMetadata, ogImages, toPlainDescription } from '@/lib/metadata';
+import { buildMetadata, buildViewport, ogImages, toPlainDescription } from '@/lib/metadata';
 import { ThemeProvider } from '@/context/ThemeContext';
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton';
 import DashboardViewClient from '@/components/dashboard/DashboardViewClient';
@@ -31,21 +31,21 @@ export async function generateMetadata({ params }) {
   });
 }
 
-/**
- * Everything below the point where the status is decided.
- *
- * `app/[usernameTag]/layout.js` has already resolved the tag, so by the time
- * this suspends the response is definitely a 200 and the shell can flush
- * behind the skeleton. This is where `app/[usernameTag]/loading.js` used to
- * sit; `components/dashboard/DashboardSkeleton.js` records why it had to move.
- */
+export async function generateViewport({ params }) {
+  const { usernameTag } = await params;
+  const { user } = await resolveUsernameTag(usernameTag);
+  return buildViewport({ themeColor: user?.dashboard?.dashHex });
+}
+
 async function DashboardBody({ usernameTag }) {
-  const [session, { user }] = await Promise.all([
+  const [session, resolved] = await Promise.all([
     auth(),
     resolveUsernameTag(usernameTag),
   ]);
 
+  const user = resolved.user;
   if (!user) notFound();
+  if (resolved.redirected) permanentRedirect(`/${user.usernameTag}`);
 
   const isOwner = session?.user?.usernameTag === user.usernameTag;
   const pages = await getPagesByUser(user._id, isOwner);
@@ -61,7 +61,11 @@ async function DashboardBody({ usernameTag }) {
       initialBackHex={user.dashboard?.backHex}
       storageKey={user.usernameTag}
     >
-      <DashboardViewClient user={publicUser} initialPages={serialisedPages} />
+      <DashboardViewClient
+        user={publicUser}
+        initialPages={serialisedPages}
+        isOwner={isOwner}
+      />
     </ThemeProvider>
   );
 }
@@ -69,13 +73,9 @@ async function DashboardBody({ usernameTag }) {
 export default async function DashboardPage({ params }) {
   const { usernameTag } = await params;
 
-  // Before the Suspense boundary below exists, so the status is still the
-  // server's to set. The tag reached this account through a rename: 308 to the
-  // current address, so a link shared before the rename still arrives.
-  const { user, redirected } = await resolveUsernameTag(usernameTag);
-  if (!user) notFound();
-  if (redirected) permanentRedirect(`/${user.usernameTag}`);
-
+  // Return the boundary immediately so a back-navigation can paint the
+  // snapshot skeleton without a parent `loading.js` (that file also wraps
+  // child routes and was flashing on the way *into* a page).
   return (
     <Suspense fallback={<DashboardSkeleton />}>
       <DashboardBody usernameTag={usernameTag} />

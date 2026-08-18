@@ -47,7 +47,7 @@ export async function POST(request) {
   }
 
   const path = new URL(imageUrl).pathname;
-  const blurUrl = `${R2_DOMAIN}/cdn-cgi/image/width=200,quality=60,blur=2,format=jpeg${path}`;
+  const blurUrl = `${R2_DOMAIN}/cdn-cgi/image/width=24,quality=60,blur=2,format=jpeg${path}`;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {

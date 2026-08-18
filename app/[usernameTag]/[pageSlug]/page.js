@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import {
   getPostsByPage,
@@ -6,8 +6,8 @@ import {
   resolveUsernameTag,
   toPublicUser,
 } from '@/lib/data';
-import { buildMetadata, ogImages, toPlainDescription } from '@/lib/metadata';
-import { sanitizeRichText } from '@/lib/sanitize';
+import { buildMetadata, buildViewport, ogImages, toPlainDescription } from '@/lib/metadata';
+import { normalizeInfoMode } from '@/lib/infoMode';
 import { ThemeProvider } from '@/context/ThemeContext';
 import PageViewClient from '@/components/page/PageViewClient';
 
@@ -38,6 +38,12 @@ export async function generateMetadata({ params }) {
   });
 }
 
+export async function generateViewport({ params }) {
+  const { usernameTag } = await params;
+  const { user } = await resolveUsernameTag(usernameTag);
+  return buildViewport({ themeColor: user?.dashboard?.dashHex });
+}
+
 export default async function PageViewPage({ params }) {
   const { usernameTag, pageSlug } = await params;
 
@@ -49,12 +55,15 @@ export default async function PageViewPage({ params }) {
   const user = resolvedUser.user;
   if (!user) notFound();
 
-  // The layouts above have already settled both segments — a missing one is a
-  // 404 and a renamed one is a 308, decided before this could suspend. Both
-  // resolves are memoised, so these are the same two queries, not four.
   const resolvedPage = await resolvePageSlug(user._id, pageSlug);
   const page = resolvedPage.page;
   if (!page) notFound();
+
+  // Layouts skip this work on flights so loading.js can show immediately.
+  // Client navigations still need one hop to the canonical address.
+  if (resolvedUser.redirected || resolvedPage.redirected) {
+    permanentRedirect(`/${user.usernameTag}/${page.slug}`);
+  }
 
   const isOwner = session?.user?.usernameTag === user.usernameTag;
 
@@ -67,12 +76,18 @@ export default async function PageViewPage({ params }) {
   // end up in the page HTML.
   const publicUser = toPublicUser(user, { isOwner });
   const serialisedPage = JSON.parse(JSON.stringify(page));
-  // See toPublicUser: rich text is cleaned on the server so the browser never
-  // has to load a sanitiser to display it.
+  const infoMode = normalizeInfoMode(
+    serialisedPage.pageMetaData?.infoMode,
+    serialisedPage.pageMetaData?.infoText2 || '',
+  );
+  const infoMode1 = normalizeInfoMode(
+    serialisedPage.pageMetaData?.infoMode1,
+    serialisedPage.pageMetaData?.infoText1 || '',
+  );
   serialisedPage.pageMetaData = {
     ...serialisedPage.pageMetaData,
-    infoText1: sanitizeRichText(serialisedPage.pageMetaData?.infoText1 || ''),
-    infoText2: sanitizeRichText(serialisedPage.pageMetaData?.infoText2 || ''),
+    infoMode,
+    infoMode1,
   };
   const serialisedPosts = JSON.parse(JSON.stringify(posts));
 
@@ -86,6 +101,7 @@ export default async function PageViewPage({ params }) {
         user={publicUser}
         page={serialisedPage}
         initialPosts={serialisedPosts}
+        isOwner={isOwner}
       />
     </ThemeProvider>
   );

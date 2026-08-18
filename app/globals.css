@@ -9,11 +9,16 @@ body {
   overscroll-behavior-y: none;
 }
 
-/* The page scrollbar stays visible. Hiding it removed the main affordance
-   telling a visitor there is more work below the fold — on a site whose whole
-   job is showing someone's work, that is the wrong thing to hide. The styled
-   thin scrollbar lower in this file is what it looks like. Modals still hide
-   theirs, where the height is controlled and the bar is noise. See LNK-5. */
+html,
+body {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
+}
 
 html,
 body,

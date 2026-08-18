@@ -1,26 +1,22 @@
 "use client";
 
 /**
- * The dashboard's loading state.
- *
- * This used to be `app/[usernameTag]/loading.js`. A `loading.js` opens a
- * Suspense boundary around everything below its segment, and React flushes the
- * response shell — status line included — the moment anything inside it
- * suspends. That made `notFound()` and `permanentRedirect()` in either public
- * route unable to set a status: an unknown profile answered 200 with the
- * not-found body, and a renamed page answered 200 with the destination's body
- * at the old address. Neither is any use to a crawler or a link preview, which
- * is the whole point of LNK-1 to LNK-3.
- *
- * It is now a Suspense fallback rendered *inside* the page, below the layout
- * that decides the status. Same skeleton, same snapshot, same moment on screen.
+ * Dashboard loading UI. Used only as the Suspense fallback inside the
+ * dashboard page — not as `loading.js`, which would also wrap child routes
+ * and flash this skeleton when opening a page.
  */
 
 import { useEffect } from "react";
 import { useParams } from "next/navigation";
 import ImageWithLoader from "@/components/ImageWithLoader";
-import { getDashboardSnapshot } from "@/lib/routeTransitionCache";
+import {
+  getDashboardSnapshot,
+  setDashboardSnapshot,
+} from "@/lib/routeTransitionCache";
 import { normalizeHex, lighten } from "@/lib/colour";
+import { readPersistedTheme } from "@/context/ThemeContext";
+import LoadingOwnerChrome from "@/components/LoadingOwnerChrome";
+import PageInfoView, { hasVisibleInfo } from "@/components/page/PageInfoView";
 
 // What the local copy of lighten() fell back to before FND-2.
 const LOADING_FALLBACK_HEX = "#2d3e50";
@@ -31,7 +27,7 @@ function DashboardLoadingCard({ page, priority = false }) {
   const blurDataURL = page?.blurDataURL || "";
 
   return (
-    <div className="p-2 pb-[3px] rounded-[4px] border-[3px] border-neutral-800/20 bg-neutral-200/60 shadow-md h-full">
+    <div className="p-2 pb-[3px] rounded-[2px] border-[2px] border-neutral-900/25 bg-neutral-200/60 shadow-md h-full">
       <div
         className="w-full aspect-[4/3] mb-1 rounded-sm overflow-hidden relative"
         style={{
@@ -78,6 +74,7 @@ export default function DashboardSkeleton() {
   const usernameTag =
     typeof params?.usernameTag === "string" ? params.usernameTag : "";
   const snapshot = getDashboardSnapshot(usernameTag);
+  const persisted = readPersistedTheme(usernameTag);
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -88,8 +85,14 @@ export default function DashboardSkeleton() {
   const hasSnapshotCards =
     Array.isArray(snapshot?.pages) && snapshot.pages.length > 0;
 
-  const dashHex = normalizeHex(snapshot?.dashHex, "#3b3b3b");
-  const backHex = normalizeHex(snapshot?.backHex, "#cccccc");
+  const dashHex = normalizeHex(
+    snapshot?.dashHex || persisted?.dashHex,
+    "#3b3b3b",
+  );
+  const backHex = normalizeHex(
+    snapshot?.backHex || persisted?.backHex,
+    "#cccccc",
+  );
   const pages = hasSnapshotCards ? snapshot.pages : [];
 
   return (
@@ -105,7 +108,7 @@ export default function DashboardSkeleton() {
         }}
       >
         <div className="w-full px-0">
-          <div className="flex items-center min-h-[73px] sm:min-h-[85px] px-4 sm:px-8">
+          <div className="flex items-center justify-between gap-2 min-h-[73px] sm:min-h-[85px] px-4 sm:px-8">
             {snapshot?.usernameTitle ? (
               <h1
                 className="text-2xl sm:text-4xl font-extrabold tracking-tight truncate"
@@ -116,6 +119,11 @@ export default function DashboardSkeleton() {
             ) : (
               <div className="h-7 sm:h-10 w-48 sm:w-64 rounded-[3px] bg-white/20 animate-pulse" />
             )}
+            <LoadingOwnerChrome
+              email={
+                snapshot?.isOwner === false ? "" : snapshot?.email || ""
+              }
+            />
           </div>
         </div>
         <div className="w-full pb-[5px]" style={{ backgroundColor: dashHex }}>
@@ -126,7 +134,34 @@ export default function DashboardSkeleton() {
         </div>
       </header>
 
-      <main className="w-full px-[10px] md:px-8 pt-[1.8rem] pb-72">
+      <main
+        className={`w-full flex flex-col px-[10px] md:px-8 pb-72 ${
+          pages.length > 0 && hasVisibleInfo(snapshot?.infoText1)
+            ? "pt-[1.8rem]"
+            : "pt-[calc(1.8rem*1.53)]"
+        }`}
+      >
+        {pages.length > 0 && hasVisibleInfo(snapshot?.infoText1) ? (
+          <div className="mb-6 shrink-0">
+            <PageInfoView
+              value={snapshot.infoText1}
+              mode={snapshot.infoMode1}
+              backHex={backHex}
+              title="Dashboard info"
+              initialHeight={snapshot.infoHeight1}
+              className="w-full block"
+              contentClassName="dashboard-content"
+              onHeight={(height) => {
+                const current = getDashboardSnapshot(usernameTag);
+                if (!current || current.infoHeight1 === height) return;
+                setDashboardSnapshot(usernameTag, {
+                  ...current,
+                  infoHeight1: height,
+                });
+              }}
+            />
+          </div>
+        ) : null}
         {pages.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-[7px] sm:gap-4">
             {pages.map((page, index) => (
@@ -148,6 +183,27 @@ export default function DashboardSkeleton() {
             />
           </div>
         )}
+        {pages.length > 0 && hasVisibleInfo(snapshot?.infoText) ? (
+          <div className="mt-6 shrink-0">
+            <PageInfoView
+              value={snapshot.infoText}
+              mode={snapshot.infoMode}
+              backHex={backHex}
+              title="Dashboard info"
+              initialHeight={snapshot.infoHeight}
+              className="w-full block"
+              contentClassName="dashboard-content"
+              onHeight={(height) => {
+                const current = getDashboardSnapshot(usernameTag);
+                if (!current || current.infoHeight === height) return;
+                setDashboardSnapshot(usernameTag, {
+                  ...current,
+                  infoHeight: height,
+                });
+              }}
+            />
+          </div>
+        ) : null}
       </main>
     </div>
   );

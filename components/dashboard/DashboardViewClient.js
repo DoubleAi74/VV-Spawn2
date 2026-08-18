@@ -11,14 +11,56 @@ import { mergeServerAndOptimistic } from "@/lib/optimisticMerge";
 import { reorderItemsByIndex, swapItemsByIds } from "@/lib/ordering";
 import { useQueue } from "@/lib/useQueue";
 import { focusRingOn } from "@/lib/colour";
-import { setDashboardSnapshot } from "@/lib/routeTransitionCache";
+import {
+  getDashboardSnapshot,
+  getPageSnapshot,
+  setDashboardSnapshot,
+  setPageSnapshot,
+} from "@/lib/routeTransitionCache";
+import { writeUpTarget } from "@/lib/upNavigation";
+import { normalizeInfoMode } from "@/lib/infoMode";
 import DashHeader from "@/components/dashboard/DashHeader";
 import PageCard from "@/components/dashboard/PageCard";
 import DashboardInfoEditor from "@/components/dashboard/DashboardInfoEditor";
 import CreatePageModal from "@/components/dashboard/CreatePageModal";
 import EditPageModal from "@/components/dashboard/EditPageModal";
+import EmptyAddButton from "@/components/EmptyAddButton";
+import { hasVisibleInfo } from "@/components/page/PageInfoView";
 
-export default function DashboardViewClient({ user, initialPages }) {
+function readSessionDraft(key, fallback) {
+  if (typeof window === "undefined" || !key) return fallback;
+  try {
+    const draft = window.sessionStorage.getItem(key);
+    return draft == null ? fallback : draft;
+  } catch {
+    return fallback;
+  }
+}
+
+function readSessionMode(key, savedMode, text) {
+  const serverMode = normalizeInfoMode(savedMode, text);
+  if (typeof window === "undefined" || !key) return serverMode;
+  try {
+    return normalizeInfoMode(window.sessionStorage.getItem(key), text);
+  } catch {
+    return serverMode;
+  }
+}
+
+function writeSession(key, value) {
+  if (!key || typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(key, value);
+  } catch {
+    /* ignore */
+  }
+}
+
+export default function DashboardViewClient({
+  user,
+  initialPages,
+  isOwner: serverIsOwner = false,
+}) {
   const { user: sessionUser } = useAuth();
   const { dashHex, backHex } = useTheme();
   const router = useRouter();
@@ -52,8 +94,45 @@ export default function DashboardViewClient({ user, initialPages }) {
   );
   const { enqueue, isSyncing } = useQueue(handleQueueIdle, handleQueueError);
 
-  const isOwner = sessionUser?.usernameTag === user.usernameTag;
+  // The server already knows — waiting on useSession is what left the header
+  // without email/Edit until the client caught up.
+  const isOwner =
+    serverIsOwner || sessionUser?.usernameTag === user.usernameTag;
   const [isEditMode, setIsEditMode] = useState(false);
+  // Local copy: a first save used to write the API but never this prop, so
+  // leaving edit mode unmounted the editor (parent still saw empty infoText).
+  const infoStorageKey = user.usernameTag
+    ? `volvox:dashInfo:${user.usernameTag}`
+    : "";
+  const infoModeKey = user.usernameTag
+    ? `volvox:dashInfoMode:${user.usernameTag}`
+    : "";
+  const infoStorageKey1 = user.usernameTag
+    ? `volvox:dashInfo1:${user.usernameTag}`
+    : "";
+  const infoModeKey1 = user.usernameTag
+    ? `volvox:dashInfoMode1:${user.usernameTag}`
+    : "";
+  const [infoText, setInfoText] = useState(() =>
+    readSessionDraft(infoStorageKey, user.dashboard?.infoText || ""),
+  );
+  const [infoMode, setInfoMode] = useState(() =>
+    readSessionMode(
+      infoModeKey,
+      user.dashboard?.infoMode,
+      user.dashboard?.infoText || "",
+    ),
+  );
+  const [infoText1, setInfoText1] = useState(() =>
+    readSessionDraft(infoStorageKey1, user.dashboard?.infoText1 || ""),
+  );
+  const [infoMode1, setInfoMode1] = useState(() =>
+    readSessionMode(
+      infoModeKey1,
+      user.dashboard?.infoMode1,
+      user.dashboard?.infoText1 || "",
+    ),
+  );
   // The theme poll only has anything to report while its own colours can be
   // changed, which is the owner in edit mode and nobody else.
   useThemeSync(isOwner && isEditMode);
@@ -82,19 +161,83 @@ export default function DashboardViewClient({ user, initialPages }) {
     });
   }, [initialPages]);
 
+  const persistInfoDraft = useCallback(
+    (next) => {
+      setInfoText(next);
+      writeSession(infoStorageKey, next);
+    },
+    [infoStorageKey],
+  );
+
+  const persistInfoMode = useCallback(
+    (next) => {
+      setInfoMode(next);
+      writeSession(infoModeKey, next);
+    },
+    [infoModeKey],
+  );
+
+  const persistInfoDraft1 = useCallback(
+    (next) => {
+      setInfoText1(next);
+      writeSession(infoStorageKey1, next);
+    },
+    [infoStorageKey1],
+  );
+
+  const persistInfoMode1 = useCallback(
+    (next) => {
+      setInfoMode1(next);
+      writeSession(infoModeKey1, next);
+    },
+    [infoModeKey1],
+  );
+
   // ── Info text ──
-  async function handleSaveInfo(infoText) {
+  async function handleSaveInfo(slot, nextInfoText, nextInfoMode) {
+    const payload = {
+      infoText,
+      infoMode,
+      infoText1,
+      infoMode1,
+    };
+    if (slot === "above") {
+      payload.infoText1 = nextInfoText;
+      payload.infoMode1 = nextInfoMode;
+    } else {
+      payload.infoText = nextInfoText;
+      payload.infoMode = nextInfoMode;
+    }
+
     const res = await fetch("/api/user/dashboard", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ infoText }),
+      body: JSON.stringify(payload),
     });
-    // The editor reports a rejected save in its own status line. Without this
-    // check a failed request still read as "Saved".
     if (!res.ok) throw new Error("Failed to save dashboard info");
-    // Hand back what was actually stored so the preview shows exactly that.
     const stored = await res.json().catch(() => ({}));
-    return typeof stored.infoText === "string" ? stored.infoText : infoText;
+    const clean =
+      typeof stored.infoText === "string" ? stored.infoText : payload.infoText;
+    const clean1 =
+      typeof stored.infoText1 === "string" ? stored.infoText1 : payload.infoText1;
+    const cleanMode = normalizeInfoMode(stored.infoMode, clean);
+    const cleanMode1 = normalizeInfoMode(stored.infoMode1, clean1);
+
+    setInfoText((current) => {
+      if (slot === "below" && current !== nextInfoText) return current;
+      writeSession(infoStorageKey, clean);
+      return clean;
+    });
+    setInfoText1((current) => {
+      if (slot === "above" && current !== nextInfoText) return current;
+      writeSession(infoStorageKey1, clean1);
+      return clean1;
+    });
+    persistInfoMode(cleanMode);
+    persistInfoMode1(cleanMode1);
+
+    if (slot === "above") return { infoText: clean1, infoMode: cleanMode1 };
+    return { infoText: clean, infoMode: cleanMode };
   }
 
   // ── Create page ──
@@ -285,29 +428,72 @@ export default function DashboardViewClient({ user, initialPages }) {
     [router],
   );
 
-  useEffect(() => {
-    if (!user?.usernameTag) return;
+  const infoHeight1Ref = useRef(
+    getDashboardSnapshot(user.usernameTag)?.infoHeight1,
+  );
+  const infoHeightRef = useRef(
+    getDashboardSnapshot(user.usernameTag)?.infoHeight,
+  );
 
+  const writeDashboardSnapshot = useCallback(() => {
+    if (!user?.usernameTag) return;
     setDashboardSnapshot(user.usernameTag, {
       usernameTitle: user.usernameTitle || "",
       email: user.email || "",
+      isOwner,
       dashHex,
       backHex,
+      infoText1,
+      infoMode1,
+      infoHeight1: infoHeight1Ref.current,
+      infoText,
+      infoMode,
+      infoHeight: infoHeightRef.current,
       pages: visiblePages.slice(0, 20).map((page) => ({
         _id: page._id,
         title: page.title || "",
         thumbnail: page.thumbnail || "",
         blurDataURL: page.blurDataURL || "",
+        slug: page.slug || "",
       })),
     });
   }, [
     user?.usernameTag,
     user?.usernameTitle,
     user?.email,
+    isOwner,
     dashHex,
     backHex,
+    infoText1,
+    infoMode1,
+    infoText,
+    infoMode,
     visiblePages,
   ]);
+
+  useEffect(() => {
+    writeDashboardSnapshot();
+  }, [writeDashboardSnapshot]);
+
+  const handleAboveHeight = useCallback(
+    (height) => {
+      if (!Number.isFinite(height) || height <= 0) return;
+      if (infoHeight1Ref.current === height) return;
+      infoHeight1Ref.current = height;
+      writeDashboardSnapshot();
+    },
+    [writeDashboardSnapshot],
+  );
+
+  const handleBelowHeight = useCallback(
+    (height) => {
+      if (!Number.isFinite(height) || height <= 0) return;
+      if (infoHeightRef.current === height) return;
+      infoHeightRef.current = height;
+      writeDashboardSnapshot();
+    },
+    [writeDashboardSnapshot],
+  );
 
   useEffect(() => {
     if (!user?.usernameTag) return;
@@ -332,7 +518,7 @@ export default function DashboardViewClient({ user, initialPages }) {
       // min-h-[150vh] forced one and a half screens of empty background even
       // for a user with two pages, so a new account's first action was
       // scrolling through nothing. See LNK-5.
-      className="min-h-screen overscroll-none"
+      className="min-h-screen overscroll-none flex flex-col"
       style={{
         backgroundColor: backHex,
         "--focus-ring": focusRingOn(backHex),
@@ -354,45 +540,100 @@ export default function DashboardViewClient({ user, initialPages }) {
         />
       </div>
 
-      <main className="w-full px-[10px] md:px-8 pt-[1.8rem] pb-72">
-        {visiblePages.length === 0 && !isEditMode && (
-          <p className="text-neutral-500 text-center py-12">No pages yet.</p>
+      <main
+        className={`w-full flex-1 flex flex-col px-[10px] md:px-8 pb-72 ${
+          (isOwner && isEditMode) || hasVisibleInfo(infoText1)
+            ? "pt-[1.8rem]"
+            : "pt-[calc(1.8rem*1.53)]"
+        }`}
+      >
+        {(isOwner && isEditMode) || hasVisibleInfo(infoText1) ? (
+          <div className="mb-6 shrink-0">
+            <DashboardInfoEditor
+              value={infoText1}
+              mode={infoMode1}
+              isEditMode={isOwner && isEditMode}
+              onChange={persistInfoDraft1}
+              onModeChange={persistInfoMode1}
+              onSave={(text, mode) => handleSaveInfo("above", text, mode)}
+              initialHeight={infoHeight1Ref.current}
+              onHeight={handleAboveHeight}
+            />
+          </div>
+        ) : null}
+
+        {visiblePages.length === 0 && isOwner && isEditMode ? (
+          <div className="flex items-center justify-center min-h-[10.35rem]">
+            <EmptyAddButton
+              label="New page"
+              onClick={() => setShowCreate(true)}
+            />
+          </div>
+        ) : (
+          <div
+            className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-[7px] sm:gap-4"
+          >
+            {visiblePages.map((page, idx) => (
+              <PageCard
+                key={page._id}
+                page={page}
+                isOwner={isOwner}
+                isEditMode={isEditMode}
+                href={page.slug ? `/${user.usernameTag}/${page.slug}` : undefined}
+                onNavigate={() => {
+                  const existing = getPageSnapshot(user.usernameTag, page.slug);
+                  const infoText1 =
+                    existing && "infoText1" in existing
+                      ? existing.infoText1
+                      : page.pageMetaData?.infoText1 || "";
+                  setPageSnapshot(user.usernameTag, page.slug, {
+                    pageTitle: page.title || existing?.pageTitle || "",
+                    userEmail: user.email || existing?.userEmail || "",
+                    isOwner,
+                    dashHex,
+                    backHex,
+                    infoText1,
+                    infoMode1: normalizeInfoMode(
+                      existing?.infoMode1 ?? page.pageMetaData?.infoMode1,
+                      infoText1,
+                    ),
+                    infoHeight1: existing?.infoHeight1,
+                    posts: existing?.posts?.length ? existing.posts : [],
+                  });
+                  writeUpTarget(`/${user.usernameTag}`);
+                }}
+                onOpen={() => {
+                  if (!page.slug) return;
+                  router.push(`/${user.usernameTag}/${page.slug}`);
+                }}
+                onPrefetch={() =>
+                  prefetchRoute(`/${user.usernameTag}/${page.slug}`)
+                }
+                onEdit={setEditingPage}
+                onDelete={handleDeletePage}
+                onMoveUp={handleMoveUp}
+                onMoveDown={handleMoveDown}
+                isFirst={idx === 0}
+                isLast={idx === visiblePages.length - 1}
+                // The first row is above the fold on every breakpoint (2 columns
+                // on phones, 4 on desktop), so it must not be lazy-loaded.
+                priority={idx < 4}
+              />
+            ))}
+          </div>
         )}
 
-        <div
-          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-[7px] sm:gap-4"
-        >
-          {visiblePages.map((page, idx) => (
-            <PageCard
-              key={page._id}
-              page={page}
-              isOwner={isOwner}
-              isEditMode={isEditMode}
-              onClick={() => router.push(`/${user.usernameTag}/${page.slug}`)}
-              onPrefetch={() =>
-                prefetchRoute(`/${user.usernameTag}/${page.slug}`)
-              }
-              onEdit={setEditingPage}
-              onDelete={handleDeletePage}
-              onMoveUp={handleMoveUp}
-              onMoveDown={handleMoveDown}
-              isFirst={idx === 0}
-              isLast={idx === visiblePages.length - 1}
-              // The first row is above the fold on every breakpoint (2 columns
-              // on phones, 4 on desktop), so it must not be lazy-loaded.
-              priority={idx < 4}
-            />
-          ))}
-        </div>
-
-        {(isOwner && isEditMode) ||
-        (user.dashboard?.infoText &&
-          user.dashboard.infoText !== "<p><br></p>") ? (
-          <div className="mt-6">
+        {(isOwner && isEditMode) || hasVisibleInfo(infoText) ? (
+          <div className="mt-6 shrink-0">
             <DashboardInfoEditor
-              initialText={user.dashboard?.infoText || ""}
+              value={infoText}
+              mode={infoMode}
               isEditMode={isOwner && isEditMode}
-              onSave={handleSaveInfo}
+              onChange={persistInfoDraft}
+              initialHeight={infoHeightRef.current}
+              onHeight={handleBelowHeight}
+              onModeChange={persistInfoMode}
+              onSave={(text, mode) => handleSaveInfo("below", text, mode)}
             />
           </div>
         ) : null}

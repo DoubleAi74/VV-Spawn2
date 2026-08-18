@@ -5,6 +5,24 @@ import { normalizeHex } from '@/lib/colour';
 
 const ThemeContext = createContext(null);
 
+export const THEME_STORAGE_PREFIX = 'volvox_theme_';
+
+/** Colours last written by ThemeProvider. Safe to call during render on the client. */
+export function readPersistedTheme(storageKey) {
+  if (typeof window === 'undefined' || !storageKey) return null;
+  try {
+    const raw = window.localStorage.getItem(`${THEME_STORAGE_PREFIX}${storageKey}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const dashHex = normalizeHex(parsed?.dashHex, '');
+    const backHex = normalizeHex(parsed?.backHex, '');
+    if (!dashHex && !backHex) return null;
+    return { dashHex, backHex };
+  } catch {
+    return null;
+  }
+}
+
 export function ThemeProvider({ children, initialDashHex, initialBackHex, storageKey }) {
   const [dashHex, setDashHexState] = useState(initialDashHex || '#2d3e50');
   const [backHex, setBackHexState] = useState(initialBackHex || '#e5e7eb');
@@ -16,7 +34,7 @@ export function ThemeProvider({ children, initialDashHex, initialBackHex, storag
   const [syncEnabled, setSyncEnabled] = useState(false);
   const localHoldUntilRef = useRef(0);
   const persistedKey = useMemo(
-    () => (storageKey ? `volvox_theme_${storageKey}` : ''),
+    () => (storageKey ? `${THEME_STORAGE_PREFIX}${storageKey}` : ''),
     [storageKey]
   );
 

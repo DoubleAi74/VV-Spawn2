@@ -1689,3 +1689,52 @@ as fully done.
   closed to everyone**, which is the safe default but means you must set it to keep your own
   access. The value is the `_id` of the account(s) you want to admit; it is set in the
   gitignored `.env.local` for local verification and is not recorded here or in any commit.
+
+## Native navigation (A–G) — 2026-08-18
+
+Implemented `plan/NATIVE_NAV.md` on `hardening`. Not committed (working tree already
+held the earlier nav-foundation edits; nothing pushed).
+
+### Shipped
+
+- **A** — `PageCard` / `PostCard` `:active` scale 0.99 + opacity, 60ms, no bounce.
+- **B** — Page cards are `next/link` `<Link prefetch={false}>`. Snapshot still seeds on
+  `pointerdown`/`click`. First-three + hover/focus/touchstart `router.prefetch` kept.
+  Post cards still open the lightbox.
+- **C** — Header arrow: `sessionStorage volvox:up` written on card navigate;
+  `router.back()` when it matches this profile, else `push`. Browser back unchanged.
+- **D** — Snapshots write-through to `sessionStorage` (tab-scoped). Dashboard entries
+  now include `slug`. Repeat click / post-refresh click paints the stored thumbs.
+- **E** — Cold page `loading.js` is eight empty 4:3 tiles, not `/vv-grey.png`.
+- **F** — New blurs: client `BLUR_WIDTH = 24`, CDN fallback `width=24`. No backfill.
+- **G** — `theme-color` from `dashHex` via `generateViewport` + `buildViewport`
+  (Next 15 rejected `metadata.themeColor`). Fallback `#2d3e50`. Private pages still
+  `noIndex`.
+
+Helpers + tests: `lib/upNavigation.js`, persist sanitizers in `lib/routeTransitionCache.js`.
+
+### Verified (desktop 1280 and narrow 390, owner `adam-aldridge` on :3001)
+
+- §0 landmine check first: card click painted the **page** skeleton (header 78px,
+  `#430a0a`), not the dashboard skeleton. Then implemented A–G.
+- First visit this tab: page skeleton, correct colours, 8 empty tiles, no grey logo,
+  no dashboard skeleton.
+- After one visit, and again after dashboard refresh: skeleton shows the 8 post thumbs
+  (`sessionStorage` page snapshot ~46kB).
+- Dashboard → page → header arrow: one hop back; browser-back does not return to the
+  page. Shared URL in a new tab: arrow goes to `/{tag}`.
+- Owner: email + Edit on skeleton and live header. Signed-out visitor: neither.
+- Cards are real `<a href="/{tag}/{slug}">`. Scrollbar `scrollbar-width: none`.
+- `<meta name="theme-color" content="#430a0a">` on both public routes; no Next
+  `themeColor` metadata warning.
+- `node --test lib/*.test.mjs` — 70 pass, 0 fail (was 9 files / previous count plus
+  4 up-arrow + 5 snapshot tests).
+- `npx next lint` on the touched files — clean.
+
+Not fully exercised in a real browser: cmd-click/middle-click new tab (headless Chrome
+does not open a popup; the surface is a normal link so the browser default applies),
+and a live new-photo upload (would write R2/DB). New writes will use the 24px blur;
+existing rows are unchanged.
+
+Did not add a parent `loading.js`, did not make `[pageSlug]/layout.js` async, did not
+add a posts-list API, service worker, view transitions, or remove `force-dynamic`.

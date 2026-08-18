@@ -1,21 +1,19 @@
 import { notFound } from 'next/navigation';
 import { resolveUsernameTag } from '@/lib/data';
+import { isDocumentRequest } from '@/lib/isDocumentRequest';
 
 /**
- * Decides what `/{usernameTag}` *is* before anything renders.
+ * Decides what `/{usernameTag}` *is* before anything renders — but only on a
+ * document request. A flight already has `loading.js` on the client; awaiting
+ * Mongo here is what made a back-navigation sit on the previous screen.
  *
- * This lives in a layout rather than in the pages below it because of how the
- * App Router streams. A `loading.js` — or any Suspense boundary — lets React
- * flush the response shell, and therefore the status line, as soon as the
- * content inside it suspends. Anything the page decides after that point can
- * no longer change the status: `notFound()` answered 200 with the not-found
- * body, and `permanentRedirect()` answered 200 with the destination's body
- * served at the old address. Measured, both, against a production build.
- *
- * A layout renders *above* its own segment's Suspense boundary, so the
- * decision is made while the status is still the server's to set. See LNK-3.
+ * On a document request this still lives in the layout, not the page, because
+ * a `loading.js` Suspense boundary flushes the status line the moment the
+ * page suspends. `notFound()` below that boundary answered 200. See LNK-3.
  */
 export default async function UsernameTagLayout({ children, params }) {
+  if (!(await isDocumentRequest())) return children;
+
   const { usernameTag } = await params;
   const { user } = await resolveUsernameTag(usernameTag);
 

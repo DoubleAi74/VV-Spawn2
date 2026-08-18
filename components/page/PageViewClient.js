@@ -11,20 +11,31 @@ import { mutationFailureDetail, useToast } from "@/context/ToastContext";
 import { mergeServerAndOptimistic } from "@/lib/optimisticMerge";
 import { reorderItemsByIndex, swapItemsByIds } from "@/lib/ordering";
 import { useQueue } from "@/lib/useQueue";
-import { setPageSnapshot } from "@/lib/routeTransitionCache";
+import {
+  getPageSnapshot,
+  setPageSnapshot,
+} from "@/lib/routeTransitionCache";
+import { decideUpAction, readUpTarget } from "@/lib/upNavigation";
+import { normalizeInfoMode } from "@/lib/infoMode";
 import PostCard from "@/components/page/PostCard";
 import PageInfoEditor from "@/components/page/PageInfoEditor";
 import CreatePostModal from "@/components/page/CreatePostModal";
 import EditPostModal from "@/components/page/EditPostModal";
 import BulkUploadModal from "@/components/page/BulkUploadModal";
 import PhotoShowModal from "@/components/page/PhotoShowModal";
+import EmptyAddButton from "@/components/EmptyAddButton";
 import { focusRingOn, hexToRgba, lighten, readableInkOn } from "@/lib/colour";
 
 function hasVisiblePageInfo(value) {
   return Boolean(value && value !== "<p><br></p>" && value.trim() !== "");
 }
 
-export default function PageViewClient({ user, page, initialPosts }) {
+export default function PageViewClient({
+  user,
+  page,
+  initialPosts,
+  isOwner: serverIsOwner = false,
+}) {
   const { user: sessionUser } = useAuth();
   const { dashHex, backHex } = useTheme();
   const router = useRouter();
@@ -58,7 +69,8 @@ export default function PageViewClient({ user, page, initialPosts }) {
   );
   const { enqueue, isSyncing } = useQueue(handleQueueIdle, handleQueueError);
 
-  const isOwner = sessionUser?.usernameTag === user.usernameTag;
+  const isOwner =
+    serverIsOwner || sessionUser?.usernameTag === user.usernameTag;
   const [isEditMode, setIsEditMode] = useState(false);
   // The theme poll only has anything to report while its own colours can be
   // changed, which is the owner in edit mode and nobody else.
@@ -70,12 +82,24 @@ export default function PageViewClient({ user, page, initialPosts }) {
   const [bulkFiles, setBulkFiles] = useState([]);
   const [lightboxPost, setLightboxPost] = useState(null);
   const [hasPageInfoContent, setHasPageInfoContent] = useState(() =>
-    hasVisiblePageInfo(page.pageMetaData?.infoText2 || ""),
+    hasVisiblePageInfo(page.pageMetaData?.infoText2 || "") ||
+    hasVisiblePageInfo(page.pageMetaData?.infoText1 || ""),
+  );
+  const [hasAboveInfo, setHasAboveInfo] = useState(() =>
+    hasVisiblePageInfo(page.pageMetaData?.infoText1 || ""),
   );
   const prefetchedRoutesRef = useRef(new Set());
 
   const lightboxPosts = posts.filter((p) => !p._optimistic);
   const dashboardHref = `/${user.usernameTag}`;
+  const infoAboveRef = useRef({
+    text: page.pageMetaData?.infoText1 || "",
+    mode: normalizeInfoMode(
+      page.pageMetaData?.infoMode1,
+      page.pageMetaData?.infoText1 || "",
+    ),
+    height: getPageSnapshot(user.usernameTag, page.slug)?.infoHeight1,
+  });
 
   const prefetchRoute = useCallback(
     (href) => {
@@ -93,9 +117,15 @@ export default function PageViewClient({ user, page, initialPosts }) {
 
   useEffect(() => {
     setHasPageInfoContent(
-      hasVisiblePageInfo(page.pageMetaData?.infoText2 || ""),
+      hasVisiblePageInfo(page.pageMetaData?.infoText2 || "") ||
+        hasVisiblePageInfo(page.pageMetaData?.infoText1 || ""),
     );
-  }, [page._id, page.pageMetaData?.infoText2]);
+    setHasAboveInfo(hasVisiblePageInfo(page.pageMetaData?.infoText1 || ""));
+  }, [
+    page._id,
+    page.pageMetaData?.infoText1,
+    page.pageMetaData?.infoText2,
+  ]);
 
   useEffect(() => {
     setPosts((currentPosts) =>
@@ -117,14 +147,18 @@ export default function PageViewClient({ user, page, initialPosts }) {
     });
   }, [initialPosts]);
 
-  useEffect(() => {
+  const writePageSnapshot = useCallback(() => {
     if (!user?.usernameTag || !page?.slug) return;
-
+    const above = infoAboveRef.current;
     setPageSnapshot(user.usernameTag, page.slug, {
       pageTitle: page.title || "",
       userEmail: user.email || "",
+      isOwner,
       dashHex,
       backHex,
+      infoText1: above.text || "",
+      infoMode1: above.mode,
+      infoHeight1: above.height,
       posts: posts.slice(0, 30).map((post) => ({
         _id: post._id,
         title: post.title || "",
@@ -136,12 +170,38 @@ export default function PageViewClient({ user, page, initialPosts }) {
   }, [
     user?.usernameTag,
     user?.email,
+    isOwner,
     page?.slug,
     page?.title,
     dashHex,
     backHex,
     posts,
   ]);
+
+  useEffect(() => {
+    writePageSnapshot();
+  }, [writePageSnapshot]);
+
+  const handleAboveMeta = useCallback(
+    ({ text, mode }) => {
+      infoAboveRef.current.text = text;
+      infoAboveRef.current.mode = mode;
+      const visible = hasVisiblePageInfo(text);
+      setHasAboveInfo((current) => (current === visible ? current : visible));
+      writePageSnapshot();
+    },
+    [writePageSnapshot],
+  );
+
+  const handleAboveHeight = useCallback(
+    (height) => {
+      if (!Number.isFinite(height) || height <= 0) return;
+      if (infoAboveRef.current.height === height) return;
+      infoAboveRef.current.height = height;
+      writePageSnapshot();
+    },
+    [writePageSnapshot],
+  );
 
   useEffect(() => {
     document.documentElement.style.backgroundColor = dashHex;
@@ -378,7 +438,13 @@ export default function PageViewClient({ user, page, initialPosts }) {
           <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
-              onClick={() => router.push(`/${user.usernameTag}`)}
+              onClick={() => {
+                if (decideUpAction(readUpTarget(), dashboardHref) === "back") {
+                  router.back();
+                } else {
+                  router.push(dashboardHref);
+                }
+              }}
               onMouseEnter={() => prefetchRoute(dashboardHref)}
               onFocus={() => prefetchRoute(dashboardHref)}
               onTouchStart={() => prefetchRoute(dashboardHref)}
@@ -446,7 +512,11 @@ export default function PageViewClient({ user, page, initialPosts }) {
       </header>
 
       <main
-        className="w-full flex-1 px-2 sm:px-4 md:px-5 pt-[33px]"
+        className={`w-full flex-1 flex flex-col px-2 sm:px-4 md:px-5 ${
+          (isOwner && isEditMode) || hasAboveInfo
+            ? "pt-[33px]"
+            : "pt-[calc(33px*1.5)]"
+        }`}
         style={{
           backgroundColor: hexToRgba(backHex, 1),
           paddingBottom: reserveHiddenInfoSpace
@@ -454,40 +524,53 @@ export default function PageViewClient({ user, page, initialPosts }) {
             : "18rem",
         }}
       >
-        <div className="max-w-7xl mx-auto">
-          {posts.length === 0 && !isEditMode && (
-            <p className="text-neutral-500 text-center py-12">No posts yet.</p>
-          )}
-          <div
-              className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-[7px] sm:gap-4"
+        <div className="max-w-7xl mx-auto w-full flex-1 flex flex-col min-h-0">
+          <PageInfoEditor
+            pageId={page._id}
+            initialText1={page.pageMetaData?.infoText1 || ""}
+            initialText2={page.pageMetaData?.infoText2 || ""}
+            initialMode={page.pageMetaData?.infoMode}
+            initialMode1={page.pageMetaData?.infoMode1}
+            isEditMode={isOwner && isEditMode}
+            onHasContentChange={setHasPageInfoContent}
+            onAboveMeta={handleAboveMeta}
+            initialHeight1={infoAboveRef.current.height}
+            onAboveHeight={handleAboveHeight}
           >
-            {posts.map((post, idx) => (
-              <PostCard
-                key={post._id}
-                post={post}
-                isOwner={isOwner}
-                isEditMode={isEditMode}
-                onClick={handlePostClick}
-                onEdit={setEditingPost}
-                onDelete={handleDeletePost}
-                onMoveLeft={handleMoveLeft}
-                onMoveRight={handleMoveRight}
-                isFirst={idx === 0}
-                isLast={idx === posts.length - 1}
-                // See DashboardViewClient: the first row is above the fold.
-                priority={idx < 4}
-              />
-            ))}
-          </div>
-          <div className="mt-6">
-            <PageInfoEditor
-              pageId={page._id}
-              initialText1={page.pageMetaData?.infoText1 || ""}
-              initialText2={page.pageMetaData?.infoText2 || ""}
-              isEditMode={isOwner && isEditMode}
-              onHasContentChange={setHasPageInfoContent}
-            />
-          </div>
+            {({ above, below }) => (
+              <div className="flex flex-1 flex-col min-h-0">
+                {above ? <div className="mb-6 shrink-0">{above}</div> : null}
+                {posts.length === 0 && isOwner && isEditMode ? (
+                  <div className="flex items-center justify-center min-h-[10.35rem]">
+                    <EmptyAddButton
+                      label="New post"
+                      onClick={() => setShowCreate(true)}
+                    />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-[7px] sm:gap-4">
+                    {posts.map((post, idx) => (
+                      <PostCard
+                        key={post._id}
+                        post={post}
+                        isOwner={isOwner}
+                        isEditMode={isEditMode}
+                        onClick={handlePostClick}
+                        onEdit={setEditingPost}
+                        onDelete={handleDeletePost}
+                        onMoveLeft={handleMoveLeft}
+                        onMoveRight={handleMoveRight}
+                        isFirst={idx === 0}
+                        isLast={idx === posts.length - 1}
+                        priority={idx < 4}
+                      />
+                    ))}
+                  </div>
+                )}
+                {below ? <div className="mt-6 shrink-0">{below}</div> : null}
+              </div>
+            )}
+          </PageInfoEditor>
         </div>
       </main>
 

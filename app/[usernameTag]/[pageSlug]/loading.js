@@ -3,8 +3,14 @@
 import { useEffect } from "react";
 import { useParams } from "next/navigation";
 import ImageWithLoader from "@/components/ImageWithLoader";
-import { getPageSnapshot } from "@/lib/routeTransitionCache";
+import {
+  getPageSnapshot,
+  setPageSnapshot,
+} from "@/lib/routeTransitionCache";
 import { normalizeHex, lighten, hexToRgba } from "@/lib/colour";
+import { readPersistedTheme } from "@/context/ThemeContext";
+import LoadingOwnerChrome from "@/components/LoadingOwnerChrome";
+import PageInfoView, { hasVisibleInfo } from "@/components/page/PageInfoView";
 
 // What the local copies fell back to before FND-2.
 const LOADING_FALLBACK_HEX = "#2d3e50";
@@ -16,7 +22,7 @@ function PostLoadingCard({ post, priority = false }) {
   const blurDataURL = post?.blurDataURL || "";
 
   return (
-    <div className="w-full p-1 rounded-[2px] bg-neutral-200/60 shadow-lg border-[3px] border-neutral-800/20 h-full flex flex-col">
+    <div className="w-full p-1 rounded-[2px] bg-neutral-200/60 shadow-lg border-[2px] border-neutral-900/25 h-full flex flex-col">
       <div
         className="w-full aspect-[4/3] rounded-sm overflow-hidden relative"
         style={{
@@ -58,6 +64,7 @@ export default function PageViewLoading() {
     typeof params?.usernameTag === "string" ? params.usernameTag : "";
   const pageSlug = typeof params?.pageSlug === "string" ? params.pageSlug : "";
   const snapshot = getPageSnapshot(usernameTag, pageSlug);
+  const persisted = readPersistedTheme(usernameTag);
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -66,8 +73,16 @@ export default function PageViewLoading() {
     };
   }, []);
 
-  const dashHex = normalizeHex(snapshot?.dashHex, "#3b3b3b");
-  const backHex = normalizeHex(snapshot?.backHex, "#cccccc");
+  // Card navigation writes the live theme into the snapshot before the flight.
+  // localStorage is the same colours ThemeProvider already had on the dashboard.
+  const dashHex = normalizeHex(
+    snapshot?.dashHex || persisted?.dashHex,
+    "#3b3b3b",
+  );
+  const backHex = normalizeHex(
+    snapshot?.backHex || persisted?.backHex,
+    "#cccccc",
+  );
   const posts = snapshot?.posts?.length ? snapshot.posts : [];
 
   return (
@@ -83,7 +98,7 @@ export default function PageViewLoading() {
         }}
       >
         <div className="flex items-center justify-between min-h-[52px] sm:min-h-[64px] px-4 sm:px-6">
-          <div className="flex items-center gap-3 min-w-0 w-full">
+          <div className="flex items-center gap-3 min-w-0">
             <div className="h-8 w-8 rounded-[3px] border border-white/20 bg-white/10" />
             {snapshot?.pageTitle ? (
               <h1
@@ -96,6 +111,12 @@ export default function PageViewLoading() {
               <div className="h-6 w-44 sm:w-60 rounded-[3px] bg-white/20 animate-pulse" />
             )}
           </div>
+          <LoadingOwnerChrome
+            variant="page"
+            email={
+              snapshot?.isOwner === false ? "" : snapshot?.userEmail || ""
+            }
+          />
         </div>
         <div className="w-full pb-[6px]" style={{ backgroundColor: dashHex }}>
           <div
@@ -106,10 +127,32 @@ export default function PageViewLoading() {
       </header>
 
       <main
-        className="w-full flex-1 px-2 sm:px-4 md:px-5 pt-[1.8rem] pb-72"
+        className={`w-full flex-1 px-2 sm:px-4 md:px-5 pb-72 ${
+          posts.length > 0 && hasVisibleInfo(snapshot?.infoText1)
+            ? "pt-[33px]"
+            : "pt-[calc(33px*1.5)]"
+        }`}
         style={{ backgroundColor: hexToRgba(backHex, 1, LOADING_RGBA_FALLBACK_HEX) }}
       >
         <div className="max-w-7xl mx-auto">
+          {posts.length > 0 && hasVisibleInfo(snapshot?.infoText1) ? (
+            <div className="mb-6">
+              <PageInfoView
+                value={snapshot.infoText1}
+                mode={snapshot.infoMode1}
+                backHex={backHex}
+                initialHeight={snapshot.infoHeight1}
+                onHeight={(height) => {
+                  const current = getPageSnapshot(usernameTag, pageSlug);
+                  if (!current || current.infoHeight1 === height) return;
+                  setPageSnapshot(usernameTag, pageSlug, {
+                    ...current,
+                    infoHeight1: height,
+                  });
+                }}
+              />
+            </div>
+          ) : null}
           {posts.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-[7px] sm:gap-4">
               {posts.map((post, index) => (
@@ -127,7 +170,6 @@ export default function PageViewLoading() {
                 src="/vv-grey.png"
                 alt=""
                 className="w-[1300px] h-[1300px] max-w-none opacity-30"
-                // className="w-[690px] h-[690px] opacity-20"
               />
             </div>
           )}

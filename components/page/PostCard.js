@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import {
   Link2,
@@ -9,9 +9,9 @@ import {
   Trash2,
   Loader2,
   X,
-} from 'lucide-react';
-import ImageWithLoader from '@/components/ImageWithLoader';
-import { useArmedDelete } from '@/lib/useArmedDelete';
+} from "lucide-react";
+import ImageWithLoader from "@/components/ImageWithLoader";
+import { useArmedDelete } from "@/lib/useArmedDelete";
 
 export default function PostCard({
   post,
@@ -48,7 +48,7 @@ export default function PostCard({
       return (
         <ImageWithLoader
           src={post.thumbnail}
-          alt={post.title || ''}
+          alt={post.title || ""}
           blurDataURL={post.blurDataURL}
           fill
           priority={priority}
@@ -57,7 +57,7 @@ export default function PostCard({
       );
     }
 
-    if (post.content_type === 'url') {
+    if (post.content_type === "url") {
       return (
         <div className="w-full h-full bg-neutral-200/70 flex items-center justify-center">
           <Link2 size={28} className="text-neutral-600" />
@@ -65,7 +65,7 @@ export default function PostCard({
       );
     }
 
-    if (post.content_type === 'text') {
+    if (post.content_type === "text") {
       return (
         <div className="w-full h-full bg-neutral-200/70 flex items-center justify-center">
           <FileText size={28} className="text-neutral-600" />
@@ -73,7 +73,7 @@ export default function PostCard({
       );
     }
 
-    if (post.content_type === 'file') {
+    if (post.content_type === "file") {
       return (
         <div className="w-full h-full bg-neutral-200/70 flex items-center justify-center">
           <FileText size={28} className="text-neutral-600" />
@@ -83,7 +83,9 @@ export default function PostCard({
 
     return (
       <div className="w-full h-full bg-neutral-200/70 flex items-center justify-center">
-        <span className="text-neutral-600 text-2xl">{post.title?.[0]?.toUpperCase() || '?'}</span>
+        <span className="text-neutral-600 text-2xl">
+          {post.title?.[0]?.toUpperCase() || "?"}
+        </span>
       </div>
     );
   }
@@ -95,17 +97,17 @@ export default function PostCard({
 
   return (
     <div
-      className={`group relative transition-opacity duration-200 ${isOptimistic ? 'opacity-75' : 'opacity-100'}`}
+      className={`group relative transition-opacity duration-200 ${isOptimistic ? "opacity-75" : "opacity-100"}`}
       onPointerLeave={handlePointerLeave}
     >
       <button
         type="button"
         disabled={isOptimistic}
         onClick={handleClick}
-        className={`w-full p-1 rounded-[2px] bg-white/70 shadow-lg border-[3px] border-neutral-900/30 transition-all duration-100 h-full flex flex-col text-left text-neutral-800/80 ${
+        className={`w-full p-1 rounded-[2px] bg-white/70 shadow-lg border-[2px] border-neutral-900/25 transition-[color,background-color,transform,opacity] duration-[60ms] ease-out h-full flex flex-col text-left text-neutral-800/80 ${
           isOptimistic
             ? "cursor-default"
-            : "cursor-pointer hover:bg-white/80 hover:text-neutral-900 focus-visible:ring-2 focus-visible:ring-neutral-700"
+            : "cursor-pointer hover:bg-white/80 hover:text-neutral-900 focus-visible:ring-2 focus-visible:ring-neutral-700 active:scale-[0.995] active:opacity-80"
         }`}
         aria-label={`Open: ${post.title || post.content_type}`}
         aria-disabled={isOptimistic}
@@ -113,10 +115,12 @@ export default function PostCard({
         <div
           className="w-full aspect-[4/3] rounded-sm overflow-hidden relative"
           style={{
-            backgroundImage: post.blurDataURL ? `url("${post.blurDataURL}")` : undefined,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            backgroundColor: !post.blurDataURL ? '#a3a3a3' : undefined,
+            backgroundImage: post.blurDataURL
+              ? `url("${post.blurDataURL}")`
+              : undefined,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            backgroundColor: !post.blurDataURL ? "#a3a3a3" : undefined,
           }}
         >
           {renderThumbnail()}
@@ -142,8 +146,8 @@ export default function PostCard({
       )}
 
       {isOwner && isEditMode && !isOptimistic && (
-        <>
-          <div className="touch-controls absolute bottom-[10px] left-[10px] flex gap-1 opacity-70 group-hover:opacity-100 transition-all duration-200">
+        <div className="absolute top-[6px] left-[6px] right-[6px] aspect-[4/3] z-10 pointer-events-none">
+          <div className="touch-controls absolute bottom-[4px] left-[4px] pointer-events-auto flex gap-1 opacity-70 group-hover:opacity-100 transition-all duration-200">
             <button
               type="button"
               onClick={(e) => {
@@ -158,7 +162,7 @@ export default function PostCard({
             </button>
           </div>
 
-          <div className="touch-controls absolute top-[10px] right-[10px] flex gap-1 opacity-70 group-hover:opacity-100 transition-all duration-200">
+          <div className="touch-controls absolute top-[4px] right-[4px] pointer-events-auto flex gap-1 opacity-70 group-hover:opacity-100 transition-all duration-200">
             <button
               type="button"
               ref={deleteButtonRef}
@@ -173,15 +177,17 @@ export default function PostCard({
                 }
               }}
               className={`touch-target group p-2 rounded-[3px] shadow-md ${
-                deletePrime ? 'bg-[#610e19]/90 hover:bg-[#610e19]/100' : 'bg-[#610e19]/40 hover:bg-[#610e19]/60'
+                deletePrime
+                  ? "bg-[#610e19]/90 hover:bg-[#610e19]/100"
+                  : "bg-[#610e19]/40 hover:bg-[#610e19]/60"
               }`}
               // The armed state is announced, not only coloured: the second tap
               // is the destructive one and a screen reader has no other way to
               // know that.
               aria-label={
                 deletePrime
-                  ? `Confirm deleting this post${post.title ? `: ${post.title}` : ''}`
-                  : 'Delete post'
+                  ? `Confirm deleting this post${post.title ? `: ${post.title}` : ""}`
+                  : "Delete post"
               }
               aria-pressed={deletePrime}
             >
@@ -193,7 +199,7 @@ export default function PostCard({
             </button>
           </div>
 
-          <div className="touch-controls absolute bottom-1/2 translate-y-1/2 w-full px-[10px] flex justify-between opacity-70 group-hover:opacity-100 transition-all duration-200">
+          <div className="touch-controls absolute top-1/2 -translate-y-1/2 left-[4px] right-[4px] flex justify-between opacity-70 group-hover:opacity-100 transition-all duration-200">
             {!isFirst && (
               <button
                 type="button"
@@ -202,7 +208,7 @@ export default function PostCard({
                   e.stopPropagation();
                   onMoveLeft(post);
                 }}
-                className="touch-target group p-[2px] rounded-[2px] shadow-sm mb-3 bg-neutral-700/70 hover:bg-neutral-700/90"
+                className="touch-target pointer-events-auto group p-[2px] rounded-[2px] shadow-sm mb-3 bg-neutral-700/70 hover:bg-neutral-700/90"
                 aria-label="Move left"
               >
                 <ChevronLeft className="w-7 h-7 text-neutral-100/70 group-hover:text-neutral-100/90" />
@@ -217,14 +223,14 @@ export default function PostCard({
                   e.stopPropagation();
                   onMoveRight(post);
                 }}
-                className="touch-target group p-[2px] rounded-[2px] shadow-sm mt-3 bg-neutral-700/70 hover:bg-neutral-700/90"
+                className="touch-target pointer-events-auto group p-[2px] rounded-[2px] shadow-sm mt-3 bg-neutral-700/70 hover:bg-neutral-700/90"
                 aria-label="Move right"
               >
                 <ChevronRight className="w-7 h-7 text-neutral-100/70 group-hover:text-neutral-100/90" />
               </button>
             )}
           </div>
-        </>
+        </div>
       )}
     </div>
   );
