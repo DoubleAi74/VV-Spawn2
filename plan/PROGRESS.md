@@ -1738,3 +1738,38 @@ existing rows are unchanged.
 
 Did not add a parent `loading.js`, did not make `[pageSlug]/layout.js` async, did not
 add a posts-list API, service worker, view transitions, or remove `force-dynamic`.
+
+## Grid stability (card actions + scroll) — 2026-08-19
+
+Branch: `grid-stability` (from `main`). Plan: `plan/GRID_STABILITY.md`. Not pushed.
+
+- [x] **A** — Edit modals omit `order_index` unless the owner changed position (`submittedOrderIndex`).
+- [x] **B** — Edit success/rollback and delete rollback touch one row (`applyEditLocally` / `applyEditFromServer` / `rollbackItemSnapshot` / `restoreDeletedItem`).
+- [x] **C** — Reorder success no longer stamps the response body onto the list. Failure still `router.refresh()`s.
+- [x] **D** — Local delete compactifies `1..n`. List generation skips a late server merge if the owner has mutated since the refresh was requested.
+- [x] **E** — Queue idle no longer calls `router.refresh()`. Successful create/edit/delete/move leave the tab quiet.
+- [x] **F** — `lib/preserveScroll.js` for the failure-refresh path: cancel on wheel/touchmove; restore only if `y` was reset to 0. Modal lock uses `position: fixed` and restores `scrollY`.
+
+### Verified
+
+- `node --test lib/*.test.mjs` — 91 pass, 0 fail.
+- `npx next lint` on the touched files — clean.
+- Owner browser (localhost:3000, in-page clicks):
+  - Title-only PATCH keys: `title,description,isPrivate,thumbnail,blurDataURL` (no `order_index`).
+  - Title save then arrow: order `Web|JS|…` → `JS|Web|…` and stayed there; 0 idle RSC.
+  - Create private page, scroll, arm+confirm delete: card gone; `scrollY` 830→602 on the local delete (row gone) then **602 for 10s**; 0 RSC.
+  - Javascript Creations, scroll 900, arrow a visible card: `y` held 900 for 8s after Saving; 0 RSC.
+  - Edit-post modal open/close at `y=900`: still 900.
+- No parent `loading.js`. `[pageSlug]/layout.js` still synchronous.
+- Owner dashboard order restored; no leftover `__grid_verify__` page.
+
+Safari/iOS modal lock not exercised (Chrome only).
+
+## Image reveal — 2026-08-19
+
+Plan: `plan/IMAGE_REVEAL.md`. Same branch (`grid-stability`).
+
+- [x] **Cards** — `ImageWithLoader` always starts `opacity-0`. `complete` + `naturalWidth` shows in the same frame (no fade). The 300ms fade still runs only on a first-ever load of that URL in the tab. Blur/grey underneath unchanged. No card spinner.
+- [x] **Login** — `AuthChrome` uses `<img>` (`/background-800.webp` / `/background-1920.webp`) hidden until load. Page stays `bg-black`. `app/login/layout.js` preloads both files with media queries.
+
+Verified: lint clean. Login desktop: 1920 img `opacity: 1`, alt empty, preload links present, page background `rgb(0,0,0)`. Dashboard card live check: see session notes if Mongo was briefly down.

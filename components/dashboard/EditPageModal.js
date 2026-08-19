@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { X, Upload, Image as ImageIcon } from 'lucide-react';
 import Modal, { useModalExit } from '@/components/Modal';
+import ThumbnailPreview from '@/components/ThumbnailPreview';
 import UploadProgressBar from '@/components/UploadProgressBar';
 import { useToast } from '@/context/ToastContext';
-import { clampOrderIndex } from '@/lib/ordering';
+import { submittedOrderIndex } from '@/lib/orderIndexPayload';
 import { processImageForUpload, fetchServerBlur } from '@/lib/processImage';
 import { toBaseSlug } from '@/lib/slug';
 import { uploadToStorage, useUploadedOnce } from '@/lib/uploadFile';
@@ -96,14 +97,16 @@ export default function EditPageModal({ page, itemCount, onClose, onSave }) {
         blurDataURL = uploaded.blurDataURL;
       }
 
+      const order_index = submittedOrderIndex(
+        orderIndex,
+        page.order_index,
+        itemCount,
+      );
       await onSave({
         title: title.trim(),
         description: subtitle.trim(),
         ...(slugTouched ? { slug: slug.trim() } : {}),
-        order_index:
-          orderIndex === ''
-            ? page.order_index || 1
-            : clampOrderIndex(orderIndex, itemCount || 1),
+        ...(order_index !== undefined ? { order_index } : {}),
         isPrivate,
         thumbnail,
         blurDataURL,
@@ -257,12 +260,7 @@ export default function EditPageModal({ page, itemCount, onClose, onSave }) {
           <div className="flex items-center gap-4">
             {thumbnailPreview ? (
               <div className="w-16 h-16 rounded-[1px] overflow-hidden border-2 border-emerald-500/40 relative">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={thumbnailPreview}
-                  alt="Thumbnail Preview"
-                  className="w-full h-full object-cover"
-                />
+                <ThumbnailPreview src={thumbnailPreview} />
               </div>
             ) : (
               <div className="w-16 h-16 rounded-[3px] bg-white/[0.03] border border-dashed border-white/15 flex items-center justify-center">

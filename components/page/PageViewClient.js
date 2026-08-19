@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Plus, Edit2, Eye, LogOut, ArrowLeft } from "lucide-react";
@@ -9,7 +9,18 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme, useThemeSync } from "@/context/ThemeContext";
 import { mutationFailureDetail, useToast } from "@/context/ToastContext";
 import { mergeServerAndOptimistic } from "@/lib/optimisticMerge";
-import { reorderItemsByIndex, swapItemsByIds } from "@/lib/ordering";
+import { normalizeOrderIndexes, swapItemsByIds } from "@/lib/ordering";
+import {
+  applyEditFromServer,
+  applyEditLocally,
+  restoreDeletedItem,
+  rollbackItemSnapshot,
+  shouldMergeServerList,
+} from "@/lib/listMutation";
+import {
+  capturePendingScroll,
+  takePendingScroll,
+} from "@/lib/preserveScroll";
 import { useQueue } from "@/lib/useQueue";
 import {
   getPageSnapshot,
@@ -39,22 +50,25 @@ export default function PageViewClient({
   const { user: sessionUser } = useAuth();
   const { dashHex, backHex } = useTheme();
   const router = useRouter();
-  const scrollRestorePosRef = useRef(null);
+  const listGenerationRef = useRef(0);
+  const refreshGenerationRef = useRef(null);
+  const bumpListGeneration = useCallback(() => {
+    listGenerationRef.current += 1;
+    return listGenerationRef.current;
+  }, []);
   const refreshWithScrollRestore = useCallback(() => {
     if (typeof window === "undefined") return;
     // Offline, the RSC refresh fails and the App Router falls back to a full
     // browser navigation — which lands on the browser's offline page and takes
     // the failure message with it. Nothing has changed on the server anyway.
     if (typeof navigator !== "undefined" && navigator.onLine === false) return;
-    scrollRestorePosRef.current = window.scrollY;
+    refreshGenerationRef.current = listGenerationRef.current;
     if ("scrollRestoration" in window.history) {
       window.history.scrollRestoration = "manual";
     }
+    capturePendingScroll(listGenerationRef.current);
     router.refresh();
   }, [router]);
-  const handleQueueIdle = useCallback(async () => {
-    refreshWithScrollRestore();
-  }, [refreshWithScrollRestore]);
   const { showError } = useToast();
   // A rolled-back change the user was not told about is indistinguishable
   // from losing their work.
@@ -67,7 +81,7 @@ export default function PageViewClient({
     },
     [showError],
   );
-  const { enqueue, isSyncing } = useQueue(handleQueueIdle, handleQueueError);
+  const { enqueue, isSyncing } = useQueue(undefined, handleQueueError);
 
   const isOwner =
     serverIsOwner || sessionUser?.usernameTag === user.usernameTag;
@@ -127,24 +141,21 @@ export default function PageViewClient({
     page.pageMetaData?.infoText2,
   ]);
 
-  useEffect(() => {
-    setPosts((currentPosts) =>
-      mergeServerAndOptimistic(initialPosts, currentPosts),
-    );
+  useLayoutEffect(() => {
+    if (
+      shouldMergeServerList(
+        refreshGenerationRef.current,
+        listGenerationRef.current,
+      )
+    ) {
+      setPosts((currentPosts) =>
+        mergeServerAndOptimistic(initialPosts, currentPosts),
+      );
+    }
 
-    if (scrollRestorePosRef.current === null) return;
-
-    const savedY = scrollRestorePosRef.current;
-    scrollRestorePosRef.current = null;
-
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        window.scrollTo({ top: savedY, behavior: "instant" });
-        if ("scrollRestoration" in window.history) {
-          window.history.scrollRestoration = "auto";
-        }
-      });
-    });
+    const savedY = takePendingScroll(listGenerationRef.current);
+    if (savedY == null) return;
+    window.scrollTo({ top: savedY, behavior: "instant" });
   }, [initialPosts]);
 
   const writePageSnapshot = useCallback(() => {
@@ -207,9 +218,6 @@ export default function PageViewClient({
     document.documentElement.style.backgroundColor = dashHex;
     return () => {
       document.documentElement.style.backgroundColor = "";
-      if ("scrollRestoration" in window.history) {
-        window.history.scrollRestoration = "auto";
-      }
     };
   }, [dashHex]);
 
@@ -223,6 +231,7 @@ export default function PageViewClient({
         _optimistic: true,
         order_index: posts.length + 1,
       };
+      bumpListGeneration();
       setPosts((prev) => [...prev, optimistic]);
 
       enqueue({
@@ -243,7 +252,7 @@ export default function PageViewClient({
         },
       });
     },
-    [posts.length, enqueue, page._id],
+    [posts.length, enqueue, page._id, bumpListGeneration],
   );
 
   // ── Bulk upload ──
@@ -273,12 +282,11 @@ export default function PageViewClient({
     if (!editingPost) return;
 
     const postId = editingPost._id;
-    const previousPosts = posts;
-    const nextOrderIndex = data.order_index ?? editingPost.order_index ?? 1;
+    const snapshot = { ...editingPost };
+    const allowReorder = data.order_index !== undefined;
+    const editGeneration = bumpListGeneration();
 
-    setPosts((currentPosts) =>
-      reorderItemsByIndex(currentPosts, postId, nextOrderIndex, data),
-    );
+    setPosts((currentPosts) => applyEditLocally(currentPosts, postId, data));
     setEditingPost(null);
 
     enqueue({
@@ -293,24 +301,27 @@ export default function PageViewClient({
         if (!res.ok) throw new Error("Failed to update post");
         const updated = await res.json();
         setPosts((currentPosts) =>
-          reorderItemsByIndex(
-            currentPosts,
-            postId,
-            updated.order_index ?? nextOrderIndex,
-            updated,
-          ),
+          applyEditFromServer(currentPosts, postId, updated, {
+            allowReorder,
+            editGeneration,
+            currentGeneration: listGenerationRef.current,
+          }),
         );
       },
       onRollback: () => {
-        setPosts(previousPosts);
+        setPosts((currentPosts) =>
+          rollbackItemSnapshot(currentPosts, postId, snapshot),
+        );
       },
     });
   }
 
   // ── Delete post ──
   function handleDeletePost(post) {
-    // if (!confirm(`Delete "${post.title || "this post"}"?`)) return;
-    setPosts((p) => p.filter((x) => x._id !== post._id));
+    bumpListGeneration();
+    setPosts((p) =>
+      normalizeOrderIndexes(p.filter((x) => x._id !== post._id)),
+    );
 
     enqueue({
       type: "delete",
@@ -320,10 +331,7 @@ export default function PageViewClient({
         if (!res.ok) throw new Error("Failed to delete post");
       },
       onRollback: () => {
-        setPosts((p) => {
-          const next = [...p, post];
-          return next.sort((a, b) => a.order_index - b.order_index);
-        });
+        setPosts((p) => restoreDeletedItem(p, post));
       },
     });
   }
@@ -338,10 +346,7 @@ export default function PageViewClient({
   // earlier item's move when two different cards are moved in quick
   // succession, and sends the later one's index computed against an
   // arrangement the server never received. Per-click requests are chattier and
-  // correct. The sequence guard drops superseded responses so a multi-place
-  // move still settles cleanly.
-  const reorderSeqRef = useRef(0);
-
+  // correct. The optimistic swap is the UI; the response body is not applied.
   function moveByOffset(post, offset) {
     const idx = posts.findIndex((p) => p._id === post._id);
     const targetIdx = idx + offset;
@@ -353,12 +358,12 @@ export default function PageViewClient({
     // flushSync so a rapid second click reads the result of this one. Without
     // it React may not have committed yet, both clicks compute the same move,
     // and the duplicate cancels the first out.
+    bumpListGeneration();
     flushSync(() => {
       setPosts(swapItemsByIds(posts, post._id, other._id));
     });
 
     const toIndex = targetIdx + 1;
-    const seq = ++reorderSeqRef.current;
 
     enqueue({
       type: "update",
@@ -372,26 +377,8 @@ export default function PageViewClient({
           body: JSON.stringify({ postId: post._id, toIndex }),
         });
         if (!res.ok) throw new Error("Failed to reorder posts");
-
-        const { ordering } = await res.json();
-        // Superseded by a later click — its response will settle the order.
-        if (seq !== reorderSeqRef.current || !Array.isArray(ordering)) return;
-
-        const indexById = new Map(
-          ordering.map((entry) => [entry._id, entry.order_index]),
-        );
-        setPosts((current) =>
-          [...current]
-            .map((p) =>
-              indexById.has(p._id)
-                ? { ...p, order_index: indexById.get(p._id) }
-                : p,
-            )
-            .sort((a, b) => (a.order_index || 0) - (b.order_index || 0)),
-        );
+        await res.json().catch(() => ({}));
       },
-      // Ordering is server-authoritative, so resync rather than restoring a
-      // snapshot that later clicks in the same burst have already invalidated.
       onRollback: () => {
         refreshWithScrollRestore();
       },

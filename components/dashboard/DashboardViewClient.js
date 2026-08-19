@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
@@ -8,7 +8,18 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme, useThemeSync } from "@/context/ThemeContext";
 import { mutationFailureDetail, useToast } from "@/context/ToastContext";
 import { mergeServerAndOptimistic } from "@/lib/optimisticMerge";
-import { reorderItemsByIndex, swapItemsByIds } from "@/lib/ordering";
+import { normalizeOrderIndexes, swapItemsByIds } from "@/lib/ordering";
+import {
+  applyEditFromServer,
+  applyEditLocally,
+  restoreDeletedItem,
+  rollbackItemSnapshot,
+  shouldMergeServerList,
+} from "@/lib/listMutation";
+import {
+  capturePendingScroll,
+  takePendingScroll,
+} from "@/lib/preserveScroll";
 import { useQueue } from "@/lib/useQueue";
 import { focusRingOn } from "@/lib/colour";
 import {
@@ -64,22 +75,25 @@ export default function DashboardViewClient({
   const { user: sessionUser } = useAuth();
   const { dashHex, backHex } = useTheme();
   const router = useRouter();
-  const scrollRestorePosRef = useRef(null);
+  const listGenerationRef = useRef(0);
+  const refreshGenerationRef = useRef(null);
+  const bumpListGeneration = useCallback(() => {
+    listGenerationRef.current += 1;
+    return listGenerationRef.current;
+  }, []);
   const refreshWithScrollRestore = useCallback(() => {
     if (typeof window === "undefined") return;
     // Offline, the RSC refresh fails and the App Router falls back to a full
     // browser navigation — which lands on the browser's offline page and takes
     // the failure message with it. Nothing has changed on the server anyway.
     if (typeof navigator !== "undefined" && navigator.onLine === false) return;
-    scrollRestorePosRef.current = window.scrollY;
+    refreshGenerationRef.current = listGenerationRef.current;
     if ("scrollRestoration" in window.history) {
       window.history.scrollRestoration = "manual";
     }
+    capturePendingScroll(listGenerationRef.current);
     router.refresh();
   }, [router]);
-  const handleQueueIdle = useCallback(async () => {
-    refreshWithScrollRestore();
-  }, [refreshWithScrollRestore]);
   const { showError } = useToast();
   // A rolled-back change the user was not told about is indistinguishable
   // from losing their work.
@@ -92,7 +106,7 @@ export default function DashboardViewClient({
     },
     [showError],
   );
-  const { enqueue, isSyncing } = useQueue(handleQueueIdle, handleQueueError);
+  const { enqueue, isSyncing } = useQueue(undefined, handleQueueError);
 
   // The server already knows — waiting on useSession is what left the header
   // without email/Edit until the client caught up.
@@ -141,24 +155,21 @@ export default function DashboardViewClient({
   const [editingPage, setEditingPage] = useState(null);
   const prefetchedRoutesRef = useRef(new Set());
 
-  useEffect(() => {
-    setPages((currentPages) =>
-      mergeServerAndOptimistic(initialPages, currentPages),
-    );
+  useLayoutEffect(() => {
+    if (
+      shouldMergeServerList(
+        refreshGenerationRef.current,
+        listGenerationRef.current,
+      )
+    ) {
+      setPages((currentPages) =>
+        mergeServerAndOptimistic(initialPages, currentPages),
+      );
+    }
 
-    if (scrollRestorePosRef.current === null) return;
-
-    const savedY = scrollRestorePosRef.current;
-    scrollRestorePosRef.current = null;
-
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        window.scrollTo({ top: savedY, behavior: "instant" });
-        if ("scrollRestoration" in window.history) {
-          window.history.scrollRestoration = "auto";
-        }
-      });
-    });
+    const savedY = takePendingScroll(listGenerationRef.current);
+    if (savedY == null) return;
+    window.scrollTo({ top: savedY, behavior: "instant" });
   }, [initialPages]);
 
   const persistInfoDraft = useCallback(
@@ -250,6 +261,7 @@ export default function DashboardViewClient({
         _optimistic: true,
         order_index: pages.length + 1,
       };
+      bumpListGeneration();
       setPages((prev) => [...prev, optimistic]);
 
       enqueue({
@@ -270,7 +282,7 @@ export default function DashboardViewClient({
         },
       });
     },
-    [pages.length, enqueue],
+    [pages.length, enqueue, bumpListGeneration],
   );
 
   // ── Edit page ──
@@ -278,12 +290,11 @@ export default function DashboardViewClient({
     if (!editingPage) return;
 
     const pageId = editingPage._id;
-    const previousPages = pages;
-    const nextOrderIndex = data.order_index ?? editingPage.order_index ?? 1;
+    const snapshot = { ...editingPage };
+    const allowReorder = data.order_index !== undefined;
+    const editGeneration = bumpListGeneration();
 
-    setPages((currentPages) =>
-      reorderItemsByIndex(currentPages, pageId, nextOrderIndex, data),
-    );
+    setPages((currentPages) => applyEditLocally(currentPages, pageId, data));
     setEditingPage(null);
 
     enqueue({
@@ -298,29 +309,27 @@ export default function DashboardViewClient({
         if (!res.ok) throw new Error("Failed to update page");
         const updated = await res.json();
         setPages((currentPages) =>
-          reorderItemsByIndex(
-            currentPages,
-            pageId,
-            updated.order_index ?? nextOrderIndex,
-            updated,
-          ),
+          applyEditFromServer(currentPages, pageId, updated, {
+            allowReorder,
+            editGeneration,
+            currentGeneration: listGenerationRef.current,
+          }),
         );
       },
       onRollback: () => {
-        setPages(previousPages);
+        setPages((currentPages) =>
+          rollbackItemSnapshot(currentPages, pageId, snapshot),
+        );
       },
     });
   }
 
   // ── Delete page ──
   function handleDeletePage(page) {
-    // if (
-    //   !confirm(
-    //     `Delete "${page.title}"? This will also delete all its posts and files.`,
-    //   )
-    // )
-    // return;
-    setPages((prev) => prev.filter((p) => p._id !== page._id));
+    bumpListGeneration();
+    setPages((prev) =>
+      normalizeOrderIndexes(prev.filter((p) => p._id !== page._id)),
+    );
 
     enqueue({
       type: "delete",
@@ -330,10 +339,7 @@ export default function DashboardViewClient({
         if (!res.ok) throw new Error("Failed to delete page");
       },
       onRollback: () => {
-        setPages((prev) => {
-          const next = [...prev, page];
-          return next.sort((a, b) => a.order_index - b.order_index);
-        });
+        setPages((prev) => restoreDeletedItem(prev, page));
       },
     });
   }
@@ -348,10 +354,7 @@ export default function DashboardViewClient({
   // earlier item's move when two different cards are moved in quick
   // succession, and sends the later one's index computed against an
   // arrangement the server never received. Per-click requests are chattier and
-  // correct. The sequence guard drops superseded responses so a multi-place
-  // move still settles cleanly.
-  const reorderSeqRef = useRef(0);
-
+  // correct. The optimistic swap is the UI; the response body is not applied.
   function moveByOffset(page, offset) {
     const idx = pages.findIndex((p) => p._id === page._id);
     const targetIdx = idx + offset;
@@ -363,12 +366,12 @@ export default function DashboardViewClient({
     // flushSync so a rapid second click reads the result of this one. Without
     // it React may not have committed yet, both clicks compute the same move,
     // and the duplicate cancels the first out.
+    bumpListGeneration();
     flushSync(() => {
       setPages(swapItemsByIds(pages, page._id, other._id));
     });
 
     const toIndex = targetIdx + 1;
-    const seq = ++reorderSeqRef.current;
 
     enqueue({
       type: "update",
@@ -382,26 +385,8 @@ export default function DashboardViewClient({
           body: JSON.stringify({ pageId: page._id, toIndex }),
         });
         if (!res.ok) throw new Error("Failed to reorder pages");
-
-        const { ordering } = await res.json();
-        // Superseded by a later click — its response will settle the order.
-        if (seq !== reorderSeqRef.current || !Array.isArray(ordering)) return;
-
-        const indexById = new Map(
-          ordering.map((entry) => [entry._id, entry.order_index]),
-        );
-        setPages((current) =>
-          [...current]
-            .map((p) =>
-              indexById.has(p._id)
-                ? { ...p, order_index: indexById.get(p._id) }
-                : p,
-            )
-            .sort((a, b) => (a.order_index || 0) - (b.order_index || 0)),
-        );
+        await res.json().catch(() => ({}));
       },
-      // Ordering is server-authoritative, so resync rather than restoring a
-      // snapshot that later clicks in the same burst have already invalidated.
       onRollback: () => {
         refreshWithScrollRestore();
       },
@@ -507,9 +492,6 @@ export default function DashboardViewClient({
     document.documentElement.style.backgroundColor = dashHex;
     return () => {
       document.documentElement.style.backgroundColor = "";
-      if ("scrollRestoration" in window.history) {
-        window.history.scrollRestoration = "auto";
-      }
     };
   }, [dashHex]);
 

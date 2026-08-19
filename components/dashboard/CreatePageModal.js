@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { X, Upload, Image as ImageIcon } from 'lucide-react';
 import Modal, { useModalExit } from '@/components/Modal';
+import ThumbnailPreview from '@/components/ThumbnailPreview';
 import UploadProgressBar from '@/components/UploadProgressBar';
 import { useToast } from '@/context/ToastContext';
 import { processImageForUpload, fetchServerBlur } from '@/lib/processImage';
@@ -209,12 +210,7 @@ export default function CreatePageModal({ onClose, onCreate }) {
           <div className="flex items-center gap-4">
             {thumbnailFile ? (
               <div className="w-16 h-16 rounded-[1px] overflow-hidden border-2 border-emerald-500/40 relative">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={thumbnailPreview}
-                  alt="Thumbnail Preview"
-                  className="w-full h-full object-cover"
-                />
+                <ThumbnailPreview src={thumbnailPreview} />
               </div>
             ) : (
               <div className="w-16 h-16 rounded-[3px] bg-white/[0.03] border border-dashed border-white/15 flex items-center justify-center">

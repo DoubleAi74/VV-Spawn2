@@ -80,12 +80,24 @@ function lockBodyScroll() {
   if (openModalCount === 0) {
     const scrollbarWidth =
       window.innerWidth - document.documentElement.clientWidth;
+    const scrollY = window.scrollY;
     restoreBodyStyle = {
       overflow: document.body.style.overflow,
       paddingRight: document.body.style.paddingRight,
+      position: document.body.style.position,
+      top: document.body.style.top,
+      left: document.body.style.left,
+      right: document.body.style.right,
+      width: document.body.style.width,
+      scrollY,
     };
     document.body.style.overflow = "hidden";
     document.body.style.paddingRight = `${scrollbarWidth}px`;
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.left = "0";
+    document.body.style.right = "0";
+    document.body.style.width = "100%";
   }
   openModalCount += 1;
 }
@@ -93,9 +105,16 @@ function lockBodyScroll() {
 function unlockBodyScroll() {
   openModalCount = Math.max(0, openModalCount - 1);
   if (openModalCount === 0 && restoreBodyStyle) {
+    const { scrollY } = restoreBodyStyle;
     document.body.style.overflow = restoreBodyStyle.overflow;
     document.body.style.paddingRight = restoreBodyStyle.paddingRight;
+    document.body.style.position = restoreBodyStyle.position;
+    document.body.style.top = restoreBodyStyle.top;
+    document.body.style.left = restoreBodyStyle.left;
+    document.body.style.right = restoreBodyStyle.right;
+    document.body.style.width = restoreBodyStyle.width;
     restoreBodyStyle = null;
+    window.scrollTo(0, scrollY);
   }
 }
 

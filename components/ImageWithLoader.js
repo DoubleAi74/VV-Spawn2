@@ -43,42 +43,63 @@ export default function ImageWithLoader({
   // the default; the lightbox builds its own URLs and does not come through here.
   const bucketedSrc = withImageBucket(src, bucket);
   const srcKey = makeSrcKey(bucketedSrc);
-  const [isLoading, setIsLoading] = useState(() => (srcKey ? !loadedSrcCache.has(srcKey) : false));
-  const [shouldAnimateReveal, setShouldAnimateReveal] = useState(() =>
-    Boolean(srcKey) && !loadedSrcCache.has(srcKey)
+  // Seen-this-tab only skips the fade. The <img> still starts invisible until
+  // this element's decoder actually has pixels (complete + naturalWidth).
+  const [readySrc, setReadySrc] = useState(null);
+  const [animateReveal, setAnimateReveal] = useState(
+    () => Boolean(srcKey) && !loadedSrcCache.has(srcKey),
   );
   const [hasError, setHasError] = useState(false);
+  const ready = Boolean(srcKey) && readySrc === srcKey;
 
   useEffect(() => {
-    const needsFirstReveal = srcKey ? !loadedSrcCache.has(srcKey) : false;
-    setIsLoading(needsFirstReveal);
-    setShouldAnimateReveal(needsFirstReveal);
+    setAnimateReveal(Boolean(srcKey) && !loadedSrcCache.has(srcKey));
     setHasError(false);
   }, [srcKey]);
 
-  const handleLoad = useCallback(() => {
+  const markReady = useCallback(() => {
     rememberLoadedSrc(srcKey);
-    setIsLoading(false);
+    setReadySrc(srcKey);
   }, [srcKey]);
 
-  const handleError = useCallback(() => {
-    setIsLoading(false);
-    setHasError(true);
-  }, []);
+  const bindWrap = useCallback(
+    (el) => {
+      if (!el || !srcKey) return;
+      const check = () => {
+        const img = el.querySelector('img');
+        if (img?.complete && img.naturalWidth > 0) markReady();
+      };
+      check();
+      requestAnimationFrame(check);
+    },
+    [srcKey, markReady],
+  );
 
-  const shouldUseNextBlur = Boolean(useNextBlurPlaceholder && blurDataURL && isLoading);
+  const handleLoad = useCallback(() => {
+    markReady();
+  }, [markReady]);
+
+  const handleError = useCallback(() => {
+    setHasError(true);
+    setReadySrc(srcKey);
+  }, [srcKey]);
+
+  const shouldUseNextBlur = Boolean(useNextBlurPlaceholder && blurDataURL && !ready);
   // 700ms read as sluggish on a grid where twenty images reveal at once, and
   // PERF-1 made it worse: the card bucket decodes fast enough that the reveal
   // is now most of the delay the user perceives, not a fraction of it.
-  const revealClassName = shouldAnimateReveal
-    ? blurDataURL
-      ? `transition-opacity duration-300 ease-out will-change-[opacity] ${
-          isLoading ? 'opacity-0' : 'opacity-100'
-        }`
-      : `transition-[opacity,filter] duration-300 ease-out will-change-[opacity,filter] ${
-          isLoading ? 'opacity-0 blur-[10px]' : 'opacity-100 blur-0'
-        }`
-    : '';
+  const revealClassName = [
+    ready ? 'opacity-100' : 'opacity-0',
+    animateReveal
+      ? blurDataURL
+        ? 'transition-opacity duration-300 ease-out will-change-[opacity]'
+        : `transition-[opacity,filter] duration-300 ease-out will-change-[opacity,filter] ${
+            ready ? 'blur-0' : 'blur-[10px]'
+          }`
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   const imageProps = {
     src: bucketedSrc,
@@ -96,7 +117,7 @@ export default function ImageWithLoader({
   };
 
   return (
-    <div className="relative w-full h-full">
+    <div ref={bindWrap} className="relative w-full h-full">
       {hasError ? (
         <div className="absolute inset-0 flex items-center justify-center bg-neutral-800/60">
           <div className="w-6 h-6 text-neutral-300/70">
@@ -106,9 +127,9 @@ export default function ImageWithLoader({
           </div>
         </div>
       ) : fill ? (
-        <Image {...imageProps} alt={alt || ''} fill sizes={sizes} />
+        <Image key={srcKey} {...imageProps} alt={alt || ''} fill sizes={sizes} />
       ) : (
-        <Image {...imageProps} alt={alt || ''} width={width} height={height} sizes={sizes} />
+        <Image key={srcKey} {...imageProps} alt={alt || ''} width={width} height={height} sizes={sizes} />
       )}
     </div>
   );

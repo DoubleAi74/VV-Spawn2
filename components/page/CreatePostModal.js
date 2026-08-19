@@ -15,6 +15,7 @@ import RichTextEditorFallback, {
   RICH_TEXT_EDITOR_FRAME_HEIGHT_CLASS,
 } from "@/components/page/RichTextEditorFallback";
 import Modal, { useModalExit } from "@/components/Modal";
+import ThumbnailPreview from "@/components/ThumbnailPreview";
 import UploadProgressBar from "@/components/UploadProgressBar";
 import { useToast } from "@/context/ToastContext";
 import { processImageForUpload, fetchServerBlur } from "@/lib/processImage";
@@ -399,12 +400,7 @@ export default function CreatePostModal({
                       <CheckCircle className="w-6 h-6 text-emerald-400/80" />
                     </div>
                   ) : (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={previewSrc}
-                      alt="Thumbnail Preview"
-                      className="w-full h-full object-cover"
-                    />
+                    <ThumbnailPreview src={previewSrc} />
                   )}
                 </div>
               ) : (

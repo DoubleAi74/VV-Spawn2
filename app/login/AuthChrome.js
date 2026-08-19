@@ -1,3 +1,7 @@
+'use client';
+
+import { useCallback, useState } from 'react';
+
 const baseCardClassName =
   "relative w-full overflow-hidden rounded-md border border-white/5 bg-black/60 px-14 py-10 shadow-2xl backdrop-blur-[1px] flex flex-col";
 
@@ -72,6 +76,31 @@ function SignupGhost() {
   );
 }
 
+function AuthBackdropImage({ src, className }) {
+  const [loaded, setLoaded] = useState(false);
+
+  const bindImg = useCallback(
+    (el) => {
+      if (!el) return;
+      if (el.complete && el.naturalWidth > 0) setLoaded(true);
+    },
+    [],
+  );
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt=""
+      ref={bindImg}
+      onLoad={() => setLoaded(true)}
+      className={`absolute inset-0 h-full w-full object-cover ${className} ${
+        loaded ? 'opacity-100' : 'opacity-0'
+      }`}
+    />
+  );
+}
+
 export function AuthShell({ children, compact = false }) {
   const cardClassName = compact
     ? baseCardClassName
@@ -81,13 +110,10 @@ export function AuthShell({ children, compact = false }) {
   return (
     <div className="relative min-h-screen overflow-hidden bg-black font-sans text-white">
       <div className="absolute inset-0 z-0" aria-hidden="true">
-        <div
-          className="absolute inset-0 bg-cover bg-center md:hidden"
-          style={{ backgroundImage: "url('/background-800.webp')" }}
-        />
-        <div
-          className="absolute inset-0 hidden bg-cover bg-center md:block"
-          style={{ backgroundImage: "url('/background-1920.webp')" }}
+        <AuthBackdropImage src="/background-800.webp" className="md:hidden" />
+        <AuthBackdropImage
+          src="/background-1920.webp"
+          className="hidden md:block"
         />
         <div className="absolute inset-0 pointer-events-none bg-black/20" />
       </div>
