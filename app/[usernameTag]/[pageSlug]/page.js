@@ -65,7 +65,8 @@ export default async function PageViewPage({ params }) {
     permanentRedirect(`/${user.usernameTag}/${page.slug}`);
   }
 
-  const isOwner = session?.user?.usernameTag === user.usernameTag;
+  // userId survives renames; usernameTag in the JWT can lag until refresh.
+  const isOwner = session?.user?.userId === String(user._id);
 
   // Private page: 404 for non-owners (BR-005, SEC-008)
   if (page.isPrivate && !isOwner) notFound();

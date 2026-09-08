@@ -22,7 +22,7 @@ const inputClassName =
   "block w-full rounded-sm px-4 py-3 bg-zinc-900/50 text-white placeholder:text-zinc-600 ring-1 ring-white/10 outline-none focus:ring-white/40 [&:-webkit-autofill]:shadow-[inset_0_0_0px_1000px_rgb(24,24,27)] [&:-webkit-autofill]:[-webkit-text-fill-color:white] [&:-webkit-autofill]:caret-white";
 
 export default function LoginPage() {
-  const { status, data: session } = useSession();
+  const { status, data: session, update } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -60,10 +60,26 @@ export default function LoginPage() {
   }, []);
 
   useEffect(() => {
-    if (status === "authenticated" && session?.user?.usernameTag) {
-      router.replace(`/${session.user.usernameTag}`);
-    }
-  }, [status, session, router]);
+    if (status !== "authenticated" || !session?.user) return;
+
+    let cancelled = false;
+    (async () => {
+      // Refresh JWT from Mongo before redirecting so a post-rename cookie
+      // cannot bounce us to a dead previousTags-miss / 404 slug.
+      let tag = session.user.usernameTag;
+      try {
+        const fresh = await update();
+        tag = fresh?.user?.usernameTag || tag;
+      } catch {
+        // Fall back to the cookie tag if refresh fails.
+      }
+      if (!cancelled && tag) router.replace(`/${tag}`);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [status, session, router, update]);
 
   useEffect(() => {
     if (!magicToken) return;

@@ -111,7 +111,9 @@ export default function DashboardViewClient({
   // The server already knows — waiting on useSession is what left the header
   // without email/Edit until the client caught up.
   const isOwner =
-    serverIsOwner || sessionUser?.usernameTag === user.usernameTag;
+    serverIsOwner ||
+    (sessionUser?.userId && user?.id && sessionUser.userId === user.id) ||
+    sessionUser?.usernameTag === user.usernameTag;
   const [isEditMode, setIsEditMode] = useState(false);
   // Local copy: a first save used to write the API but never this prop, so
   // leaving edit mode unmounted the editor (parent still saw empty infoText).

@@ -47,7 +47,8 @@ async function DashboardBody({ usernameTag }) {
   if (!user) notFound();
   if (resolved.redirected) permanentRedirect(`/${user.usernameTag}`);
 
-  const isOwner = session?.user?.usernameTag === user.usernameTag;
+  // userId survives renames; usernameTag in the JWT can lag until refresh.
+  const isOwner = session?.user?.userId === String(user._id);
   const pages = await getPagesByUser(user._id, isOwner);
 
   // Serialise MongoDB documents for the client. Only the public projection of
