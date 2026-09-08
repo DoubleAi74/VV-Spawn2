@@ -13,6 +13,16 @@ import {
 import ImageWithLoader from "@/components/ImageWithLoader";
 import { useArmedDelete } from "@/lib/useArmedDelete";
 
+/** Same destination the lightbox Open control uses (modal stays download-only). */
+function postOpenUrl(post) {
+  if (!post) return "";
+  if (post.content_type === "text") return "";
+  if (post.content_type === "url" || post.content_type === "file") {
+    return post.content || "";
+  }
+  return post.content || post.thumbnail || "";
+}
+
 export default function PostCard({
   post,
   isOwner,
@@ -34,6 +44,7 @@ export default function PostCard({
     buttonRef: deleteButtonRef,
   } = useArmedDelete();
   const isOptimistic = Boolean(post._optimistic);
+  const openUrl = postOpenUrl(post);
 
   function renderThumbnail() {
     if (isOptimistic && !post.thumbnail && !post.blurDataURL) {
@@ -97,14 +108,14 @@ export default function PostCard({
 
   return (
     <div
-      className={`group relative transition-opacity duration-200 ${isOptimistic ? "opacity-75" : "opacity-100"}`}
+      className={`group relative min-w-0 w-full transition-opacity duration-200 ${isOptimistic ? "opacity-75" : "opacity-100"}`}
       onPointerLeave={handlePointerLeave}
     >
       <button
         type="button"
         disabled={isOptimistic}
         onClick={handleClick}
-        className={`w-full p-1 rounded-[2px] bg-white/70 shadow-lg border-[2px] border-neutral-900/25 transition-[color,background-color,transform,opacity] duration-[60ms] ease-out h-full flex flex-col text-left text-neutral-800/80 ${
+        className={`w-full min-w-0 max-w-full overflow-hidden p-1 rounded-[2px] bg-white/70 shadow-lg border-[2px] border-neutral-900/25 transition-[color,background-color,transform,opacity] duration-[60ms] ease-out h-full flex flex-col text-left text-neutral-800/80 ${
           isOptimistic
             ? "cursor-default"
             : "cursor-pointer hover:bg-white/80 hover:text-neutral-900 focus-visible:ring-2 focus-visible:ring-neutral-700 active:scale-[0.995] active:opacity-80"
@@ -132,10 +143,34 @@ export default function PostCard({
           )}
         </div>
 
-        <div className="px-1 pt-[4px] truncate text-xs font-bold text-black/90 group-hover:text-black">
-          {post.title || "\u00A0"}
+        <div className="px-1 pt-[4px] w-full min-w-0 max-w-full overflow-hidden">
+          <div
+            className="block truncate text-xs font-bold text-black/90 group-hover:text-black"
+            title={post.title || undefined}
+          >
+            {post.title || "\u00A0"}
+          </div>
         </div>
       </button>
+
+      {openUrl && !isOptimistic && (
+        <div className="absolute top-[6px] left-[6px] right-[6px] aspect-[4/3] z-20 pointer-events-none">
+          <a
+            href={openUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="touch-controls pointer-events-auto absolute top-[10px] left-1/2 -translate-x-1/2 w-[min(100%-0.5rem,10.5rem)] max-w-[calc(100%-0.5rem)] justify-center flex items-center px-3 sm:px-5 py-2.5 rounded-[2px] bg-neutral-950/20 hover:bg-neutral-950/45 text-white/80 hover:text-white text-[15px] font-semibold tracking-wide shadow-sm backdrop-blur-[1px] border border-white/25 hover:border-white/40 opacity-0 group-hover:opacity-55 hover:!opacity-100 focus-visible:opacity-100 transition-[opacity,background-color,border-color,color] duration-150"
+            aria-label={
+              post.content_type === "url"
+                ? `Open link: ${post.title || "post"}`
+                : `Open content: ${post.title || "post"}`
+            }
+          >
+            {post.content_type === "url" ? "Open Link" : "Open"}
+          </a>
+        </div>
+      )}
 
       {isOptimistic && (
         <div className="absolute inset-0 rounded-[2px] bg-black/10 flex items-center justify-center pointer-events-none">

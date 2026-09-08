@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import ImageWithLoader from "@/components/ImageWithLoader";
 import {
@@ -11,6 +11,7 @@ import { normalizeHex, lighten, hexToRgba } from "@/lib/colour";
 import { readPersistedTheme } from "@/context/ThemeContext";
 import LoadingOwnerChrome from "@/components/LoadingOwnerChrome";
 import PageInfoView, { hasVisibleInfo } from "@/components/page/PageInfoView";
+import { postGridClassFor, readStoredPostCols } from "@/lib/postGrid";
 
 // What the local copies fell back to before FND-2.
 const LOADING_FALLBACK_HEX = "#2d3e50";
@@ -22,7 +23,7 @@ function PostLoadingCard({ post, priority = false }) {
   const blurDataURL = post?.blurDataURL || "";
 
   return (
-    <div className="w-full p-1 rounded-[2px] bg-neutral-200/60 shadow-lg border-[2px] border-neutral-900/25 h-full flex flex-col">
+    <div className="w-full min-w-0 max-w-full overflow-hidden p-1 rounded-[2px] bg-neutral-200/60 shadow-lg border-[2px] border-neutral-900/25 h-full flex flex-col">
       <div
         className="w-full aspect-[4/3] rounded-sm overflow-hidden relative"
         style={{
@@ -49,10 +50,12 @@ function PostLoadingCard({ post, priority = false }) {
         )}
       </div>
 
-      <div className="px-1 pt-[4px] truncate text-xs font-bold text-neutral-800/85">
-        {title || (
-          <span className="inline-block h-3 w-3/5 rounded-[2px] bg-neutral-800/10 align-middle" />
-        )}
+      <div className="px-1 pt-[4px] w-full min-w-0 max-w-full overflow-hidden">
+        <div className="block truncate text-xs font-bold text-neutral-800/85">
+          {title || (
+            <span className="inline-block h-3 w-3/5 rounded-[2px] bg-neutral-800/10 align-middle" />
+          )}
+        </div>
       </div>
     </div>
   );
@@ -84,6 +87,13 @@ export default function PageViewLoading() {
     "#cccccc",
   );
   const posts = snapshot?.posts?.length ? snapshot.posts : [];
+  const [postCols, setPostCols] = useState(null);
+
+  useLayoutEffect(() => {
+    setPostCols(readStoredPostCols());
+  }, []);
+
+  const postGridClass = postGridClassFor(postCols);
 
   return (
     <div
@@ -95,6 +105,8 @@ export default function PageViewLoading() {
         style={{
           backgroundColor: dashHex,
           paddingTop: "env(safe-area-inset-top, 0px)",
+          marginTop: "-4px",
+          paddingBottom: "4px",
         }}
       >
         <div className="flex items-center justify-between min-h-[52px] sm:min-h-[64px] px-4 sm:px-6">
@@ -118,7 +130,7 @@ export default function PageViewLoading() {
             }
           />
         </div>
-        <div className="w-full pb-[6px]" style={{ backgroundColor: dashHex }}>
+        <div className="w-full pb-[2px]" style={{ backgroundColor: dashHex }}>
           <div
             className="h-[8px] w-full border-t border-black/15"
             style={{ backgroundColor: lighten(dashHex, 30, LOADING_FALLBACK_HEX) }}
@@ -127,16 +139,16 @@ export default function PageViewLoading() {
       </header>
 
       <main
-        className={`w-full flex-1 px-2 sm:px-4 md:px-5 pb-72 ${
+        className={`w-full flex-1 flex flex-col px-2 sm:px-4 md:px-5 pb-72 ${
           posts.length > 0 && hasVisibleInfo(snapshot?.infoText1)
             ? "pt-[33px]"
             : "pt-[calc(33px*1.5)]"
         }`}
         style={{ backgroundColor: hexToRgba(backHex, 1, LOADING_RGBA_FALLBACK_HEX) }}
       >
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-7xl mx-auto w-full">
           {posts.length > 0 && hasVisibleInfo(snapshot?.infoText1) ? (
-            <div className="mb-6">
+            <div className="mb-6 shrink-0">
               <PageInfoView
                 value={snapshot.infoText1}
                 mode={snapshot.infoMode1}
@@ -154,7 +166,7 @@ export default function PageViewLoading() {
             </div>
           ) : null}
           {posts.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-[7px] sm:gap-4">
+            <div className={`grid ${postGridClass} gap-[7px] sm:gap-4`}>
               {posts.map((post, index) => (
                 <PostLoadingCard
                   key={post._id || `skeleton-${index}`}

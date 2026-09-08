@@ -21,6 +21,7 @@ export default function EditPageModal({ page, itemCount, onClose, onSave }) {
   const [slugTouched, setSlugTouched] = useState(false);
   const [orderIndex, setOrderIndex] = useState(page.order_index || 1);
   const [isPrivate, setIsPrivate] = useState(page.isPrivate || false);
+  const [isDownloadable, setIsDownloadable] = useState(page.isDownloadable !== false);
   const [thumbnailFile, setThumbnailFile] = useState(null);
   const [thumbnailPreview, setThumbnailPreview] = useState(page.thumbnail || '');
   const [error, setError] = useState('');
@@ -38,6 +39,7 @@ export default function EditPageModal({ page, itemCount, onClose, onSave }) {
     setSlugTouched(false);
     setOrderIndex(page.order_index || 1);
     setIsPrivate(page.isPrivate || false);
+    setIsDownloadable(page.isDownloadable !== false);
     setThumbnailFile(null);
     setThumbnailPreview(page.thumbnail || '');
     setError('');
@@ -108,6 +110,7 @@ export default function EditPageModal({ page, itemCount, onClose, onSave }) {
         ...(slugTouched ? { slug: slug.trim() } : {}),
         ...(order_index !== undefined ? { order_index } : {}),
         isPrivate,
+        isDownloadable,
         thumbnail,
         blurDataURL,
       });
@@ -207,7 +210,7 @@ export default function EditPageModal({ page, itemCount, onClose, onSave }) {
 
         <div className="flex flex-row justify-between pl-1 pr-2 gap-4 -mt-2">
           <div className="flex-1 ml-0 pt-6">
-            <div className="flex items-center gap-3 py-0 p-1 rounded-[3px]">
+            <div className="flex flex-col gap-3 py-0 p-1 rounded-[3px]">
               <label className="flex items-center gap-3 cursor-pointer select-none">
                 <div className="relative inline-flex items-center">
                   <input
@@ -232,6 +235,32 @@ export default function EditPageModal({ page, itemCount, onClose, onSave }) {
                   Private page
                   <br />
                   <span className="text-xs text-white/40">(visible only to you)</span>
+                </span>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer select-none">
+                <div className="relative inline-flex items-center">
+                  <input
+                    type="checkbox"
+                    id="isDownloadableEditCheckbox"
+                    checked={isDownloadable}
+                    onChange={(e) => setIsDownloadable(e.target.checked)}
+                    className="peer h-5 w-5 appearance-none rounded-[2px] border border-white/20 bg-white/[0.04] checked:bg-slate-700/80 checked:border-slate-500/90 transition-colors duration-150 cursor-pointer"
+                  />
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={2.5}
+                    stroke="white"
+                    className="pointer-events-none absolute inset-0 m-auto hidden h-3 w-3 peer-checked:block"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                  </svg>
+                </div>
+                <span className="text-sm text-white/70 leading-tight">
+                  Allow downloads
+                  <br />
+                  <span className="text-xs text-white/40">(visitors can download posts)</span>
                 </span>
               </label>
             </div>

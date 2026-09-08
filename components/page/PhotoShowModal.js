@@ -42,6 +42,7 @@ export default function PhotoShowModal({
   posts = [],
   onClose,
   onNavigate,
+  canDownload = true,
 }) {
   // The exit animation needs the modal on screen a moment longer than the
   // parent would keep it, so every close goes through requestClose.
@@ -365,7 +366,7 @@ export default function PhotoShowModal({
                 <ExternalLink size={15} />
               </a>
             )}
-            {downloadUrl && (
+            {canDownload && downloadUrl && (
               <button
                 type="button"
                 onClick={() => handleDownload(downloadUrl)}

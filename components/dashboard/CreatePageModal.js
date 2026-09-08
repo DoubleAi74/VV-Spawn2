@@ -19,6 +19,7 @@ export default function CreatePageModal({ onClose, onCreate }) {
   const [slug, setSlug] = useState('');
   const [slugTouched, setSlugTouched] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
+  const [isDownloadable, setIsDownloadable] = useState(true);
   const [thumbnailFile, setThumbnailFile] = useState(null);
   const [thumbnailPreview, setThumbnailPreview] = useState('');
   const [error, setError] = useState('');
@@ -75,6 +76,7 @@ export default function CreatePageModal({ onClose, onCreate }) {
         description: subtitle.trim(),
         ...(slugTouched && slug.trim() ? { slug: slug.trim() } : {}),
         isPrivate,
+        isDownloadable,
         thumbnail: uploaded.thumbnail,
         blurDataURL: uploaded.blurDataURL,
       });
@@ -174,8 +176,8 @@ export default function CreatePageModal({ onClose, onCreate }) {
           />
         </div>
 
-        <div className="flex items-center gap-3 py-0 p-1 rounded-[3px]">
-          <label className="flex items-center gap-3 cursor-pointer select-none">
+        <div className="flex flex-col sm:flex-row sm:items-start gap-3 py-0 p-1 rounded-[3px]">
+          <label className="flex items-center gap-3 cursor-pointer select-none flex-1">
             <div className="relative inline-flex items-center">
               <input
                 type="checkbox"
@@ -199,6 +201,32 @@ export default function CreatePageModal({ onClose, onCreate }) {
               Private page
               <br />
               <span className="text-xs text-white/40">(visible only to you logged in)</span>
+            </span>
+          </label>
+          <label className="flex items-center gap-3 cursor-pointer select-none flex-1">
+            <div className="relative inline-flex items-center">
+              <input
+                type="checkbox"
+                id="isDownloadableCheckbox"
+                checked={isDownloadable}
+                onChange={(e) => setIsDownloadable(e.target.checked)}
+                className="peer h-5 w-5 appearance-none rounded-[2px] border border-white/20 bg-white/[0.04] checked:bg-slate-700/80 checked:border-slate-500/90 transition-colors duration-150 cursor-pointer"
+              />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={2.5}
+                stroke="white"
+                className="pointer-events-none absolute inset-0 m-auto hidden h-3 w-3 peer-checked:block"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+              </svg>
+            </div>
+            <span className="text-sm text-white/70 leading-tight">
+              Allow downloads
+              <br />
+              <span className="text-xs text-white/40">(visitors can download posts)</span>
             </span>
           </label>
         </div>

@@ -80,24 +80,21 @@ function lockBodyScroll() {
   if (openModalCount === 0) {
     const scrollbarWidth =
       window.innerWidth - document.documentElement.clientWidth;
-    const scrollY = window.scrollY;
+    // Overflow-only lock (no position:fixed). Pinning the body as fixed
+    // collapses sticky page headers — env(safe-area-inset-top) drops and the
+    // header visibly shortens behind the lightbox.
     restoreBodyStyle = {
-      overflow: document.body.style.overflow,
-      paddingRight: document.body.style.paddingRight,
-      position: document.body.style.position,
-      top: document.body.style.top,
-      left: document.body.style.left,
-      right: document.body.style.right,
-      width: document.body.style.width,
-      scrollY,
+      bodyOverflow: document.body.style.overflow,
+      htmlOverflow: document.documentElement.style.overflow,
+      bodyPaddingRight: document.body.style.paddingRight,
+      htmlPaddingRight: document.documentElement.style.paddingRight,
     };
+    document.documentElement.style.overflow = "hidden";
     document.body.style.overflow = "hidden";
-    document.body.style.paddingRight = `${scrollbarWidth}px`;
-    document.body.style.position = "fixed";
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.left = "0";
-    document.body.style.right = "0";
-    document.body.style.width = "100%";
+    if (scrollbarWidth > 0) {
+      document.documentElement.style.paddingRight = `${scrollbarWidth}px`;
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
   }
   openModalCount += 1;
 }
@@ -105,16 +102,11 @@ function lockBodyScroll() {
 function unlockBodyScroll() {
   openModalCount = Math.max(0, openModalCount - 1);
   if (openModalCount === 0 && restoreBodyStyle) {
-    const { scrollY } = restoreBodyStyle;
-    document.body.style.overflow = restoreBodyStyle.overflow;
-    document.body.style.paddingRight = restoreBodyStyle.paddingRight;
-    document.body.style.position = restoreBodyStyle.position;
-    document.body.style.top = restoreBodyStyle.top;
-    document.body.style.left = restoreBodyStyle.left;
-    document.body.style.right = restoreBodyStyle.right;
-    document.body.style.width = restoreBodyStyle.width;
+    document.body.style.overflow = restoreBodyStyle.bodyOverflow;
+    document.documentElement.style.overflow = restoreBodyStyle.htmlOverflow;
+    document.body.style.paddingRight = restoreBodyStyle.bodyPaddingRight;
+    document.documentElement.style.paddingRight = restoreBodyStyle.htmlPaddingRight;
     restoreBodyStyle = null;
-    window.scrollTo(0, scrollY);
   }
 }
 

@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Plus, Edit2, Eye, LogOut, ArrowLeft } from "lucide-react";
+import { Plus, Edit2, Eye, LogOut, ArrowLeft, ChevronUp, ChevronDown } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme, useThemeSync } from "@/context/ThemeContext";
@@ -36,10 +36,19 @@ import BulkUploadModal from "@/components/page/BulkUploadModal";
 import PhotoShowModal from "@/components/page/PhotoShowModal";
 import EmptyAddButton from "@/components/EmptyAddButton";
 import { focusRingOn, hexToRgba, lighten, readableInkOn } from "@/lib/colour";
+import {
+  POST_GRID_MAX,
+  POST_GRID_MIN,
+  postGridClassFor,
+  readStoredPostCols,
+  resolveDefaultPostCols,
+  writeStoredPostCols,
+} from "@/lib/postGrid";
 
 function hasVisiblePageInfo(value) {
   return Boolean(value && value !== "<p><br></p>" && value.trim() !== "");
 }
+
 
 export default function PageViewClient({
   user,
@@ -95,6 +104,9 @@ export default function PageViewClient({
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [bulkFiles, setBulkFiles] = useState([]);
   const [lightboxPost, setLightboxPost] = useState(null);
+  // null = responsive default (2 / 3 / 4). A number locks the column count.
+  const [postCols, setPostCols] = useState(null);
+
   const [hasPageInfoContent, setHasPageInfoContent] = useState(() =>
     hasVisiblePageInfo(page.pageMetaData?.infoText2 || "") ||
     hasVisiblePageInfo(page.pageMetaData?.infoText1 || ""),
@@ -399,6 +411,26 @@ export default function PageViewClient({
     setLightboxPost(post);
   }
 
+
+  // Layout effect so a stored density applies before first paint (matches loading.js).
+  useLayoutEffect(() => {
+    setPostCols(readStoredPostCols());
+  }, []);
+
+  const adjustPostCols = useCallback((delta) => {
+    setPostCols((current) => {
+      const base = current ?? resolveDefaultPostCols();
+      const next = Math.min(
+        POST_GRID_MAX,
+        Math.max(POST_GRID_MIN, base + delta),
+      );
+      writeStoredPostCols(next);
+      return next;
+    });
+  }, []);
+
+  const postGridClass = postGridClassFor(postCols);
+
   const reserveHiddenInfoSpace = isOwner && !isEditMode && !hasPageInfoContent;
 
   return (
@@ -453,7 +485,7 @@ export default function PageViewClient({
             className="flex items-center gap-2 shrink-0"
             aria-label="Page actions"
           >
-            {isOwner && (
+            {isOwner ? (
               <>
                 {isSyncing && (
                   <span className="text-white/60 text-xs hidden sm:block">
@@ -463,6 +495,32 @@ export default function PageViewClient({
                 <span className="text-white/65 text-xs hidden md:block truncate max-w-[160px]">
                   {user.email}
                 </span>
+                <div
+                  className="flex flex-col overflow-hidden rounded-none border border-white/20 bg-white/10"
+                  role="group"
+                  aria-label="Posts per row"
+                >
+                  <button
+                    type="button"
+                    onClick={() => adjustPostCols(1)}
+                    disabled={postCols === POST_GRID_MAX}
+                    className="h-5 w-9 grid place-items-center text-white/80 hover:bg-white/15 hover:text-white disabled:opacity-35 disabled:hover:bg-transparent transition-colors"
+                    aria-label="More posts per row"
+                    title="More posts per row"
+                  >
+                    <ChevronUp size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => adjustPostCols(-1)}
+                    disabled={postCols === POST_GRID_MIN}
+                    className="h-5 w-9 grid place-items-center border-t border-white/20 text-white/80 hover:bg-white/15 hover:text-white disabled:opacity-35 disabled:hover:bg-transparent transition-colors"
+                    aria-label="Fewer posts per row"
+                    title="Fewer posts per row"
+                  >
+                    <ChevronDown size={16} />
+                  </button>
+                </div>
                 <button
                   type="button"
                   onClick={() => setIsEditMode((m) => !m)}
@@ -487,6 +545,33 @@ export default function PageViewClient({
                   <LogOut size={15} />
                 </button>
               </>
+            ) : (
+              <div
+                className="flex flex-col overflow-hidden rounded-none border border-white/20 bg-white/10"
+                role="group"
+                aria-label="Posts per row"
+              >
+                <button
+                  type="button"
+                  onClick={() => adjustPostCols(1)}
+                  disabled={postCols === POST_GRID_MAX}
+                  className="h-5 w-9 grid place-items-center text-white/80 hover:bg-white/15 hover:text-white disabled:opacity-35 disabled:hover:bg-transparent transition-colors"
+                  aria-label="More posts per row"
+                  title="More posts per row"
+                >
+                  <ChevronUp size={16} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => adjustPostCols(-1)}
+                  disabled={postCols === POST_GRID_MIN}
+                  className="h-5 w-9 grid place-items-center border-t border-white/20 text-white/80 hover:bg-white/15 hover:text-white disabled:opacity-35 disabled:hover:bg-transparent transition-colors"
+                  aria-label="Fewer posts per row"
+                  title="Fewer posts per row"
+                >
+                  <ChevronDown size={16} />
+                </button>
+              </div>
             )}
           </nav>
         </div>
@@ -535,7 +620,7 @@ export default function PageViewClient({
                     />
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-[7px] sm:gap-4">
+                  <div className={`grid ${postGridClass} gap-[7px] sm:gap-4`}>
                     {posts.map((post, idx) => (
                       <PostCard
                         key={post._id}
@@ -622,6 +707,7 @@ export default function PageViewClient({
           posts={lightboxPosts}
           onClose={() => setLightboxPost(null)}
           onNavigate={setLightboxPost}
+          canDownload={isOwner || page.isDownloadable !== false}
         />
       )}
     </div>
