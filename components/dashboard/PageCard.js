@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from "react";
 "use client";
 
 import Link from "next/link";
@@ -37,6 +38,33 @@ export default function PageCard({
     buttonRef: deleteButtonRef,
   } = useArmedDelete();
   const isOptimistic = Boolean(page._optimistic);
+  const titleRef = useRef(null);
+  const [titleWraps, setTitleWraps] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = titleRef.current;
+    if (!el) return;
+
+    const measure = () => {
+      // Always measure at text-sm so shrinking a wrapped title cannot
+      // flip it back to one line and oscillate the class.
+      el.style.fontSize = "0.875rem";
+      el.style.lineHeight = "1.375";
+      const lineHeight = parseFloat(getComputedStyle(el).lineHeight);
+      const wraps =
+        Number.isFinite(lineHeight) &&
+        lineHeight > 0 &&
+        el.scrollHeight > lineHeight * 1.5;
+      el.style.fontSize = "";
+      el.style.lineHeight = "";
+      setTitleWraps(wraps);
+    };
+
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [page.title]);
 
   function handleNavigate() {
     if (isOptimistic) return;
@@ -105,7 +133,7 @@ export default function PageCard({
       )}
 
       <div className="flex pl-1 pr-1 items-center justify-between gap-1 h-8 w-full overflow-hidden">
-        <div className="flex items-center gap-1 min-w-0 flex-1">
+        <div className="flex items-center gap-1 min-w-0 flex-1 h-full py-0.5">
           {page.isPrivate && isOwner && (
             <Lock
               size={12}
@@ -114,7 +142,12 @@ export default function PageCard({
             />
           )}
           <h3
-            className="min-w-0 flex-1 font-bold text-black/90 group-hover:text-black text-sm leading-snug line-clamp-2 break-words"
+            ref={titleRef}
+            className={`min-w-0 flex-1 font-bold text-black/90 group-hover:text-black line-clamp-2 break-words ${
+              titleWraps
+                ? "text-[11px] leading-tight"
+                : "text-sm leading-snug"
+            }`}
             title={page.title}
           >
             {page.title}
