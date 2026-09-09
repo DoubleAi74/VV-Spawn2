@@ -6,9 +6,14 @@
  * and flash this skeleton when opening a page.
  */
 
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import ImageWithLoader from "@/components/ImageWithLoader";
+import {
+  DASH_GRID_STORAGE_KEY,
+  postGridClassFor,
+  readStoredPostCols,
+} from "@/lib/postGrid";
 import {
   getDashboardSnapshot,
   setDashboardSnapshot,
@@ -95,6 +100,14 @@ export default function DashboardSkeleton() {
   );
   const pages = hasSnapshotCards ? snapshot.pages : [];
 
+  // Mirror DashboardViewClient's grid so the cards do not jump when the
+  // flight finishes.
+  const [postCols, setPostCols] = useState(null);
+  useLayoutEffect(() => {
+    setPostCols(readStoredPostCols(DASH_GRID_STORAGE_KEY));
+  }, []);
+  const postGridClass = postGridClassFor(postCols);
+
   return (
     <div
       className="min-h-[150vh] overscroll-none"
@@ -163,7 +176,7 @@ export default function DashboardSkeleton() {
           </div>
         ) : null}
         {pages.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-[7px] sm:gap-4">
+          <div className={`grid ${postGridClass} gap-[7px] sm:gap-4`}>
             {pages.map((page, index) => (
               <DashboardLoadingCard
                 key={page._id || `skeleton-${index}`}

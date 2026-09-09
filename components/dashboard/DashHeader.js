@@ -5,6 +5,7 @@ import Link from "next/link";
 import { LogOut, Edit2, Eye } from "lucide-react";
 import { signOut } from "next-auth/react";
 import TitleEdit, { TitleEditPanel } from "@/components/dashboard/TitleEdit";
+import PostColsStepper from "@/components/PostColsStepper";
 import { useTheme } from "@/context/ThemeContext";
 import { useToast } from "@/context/ToastContext";
 import { focusRingOn, lighten, readableInkOn } from "@/lib/colour";
@@ -53,6 +54,8 @@ export default function DashHeader({
   statusText,
   onToggleEdit,
   onTitleSave,
+  postCols,
+  onAdjustPostCols,
 }) {
   const { dashHex, backHex, setDashHex, setBackHex } = useTheme();
   const { showError } = useToast();
@@ -191,6 +194,11 @@ export default function DashHeader({
                     />
                   </div>
                 )}
+                <PostColsStepper
+                  noun="Pages"
+                  postCols={postCols}
+                  onAdjust={onAdjustPostCols}
+                />
                 <button
                   type="button"
                   onClick={onToggleEdit}
@@ -219,12 +227,19 @@ export default function DashHeader({
                 </button>
               </>
             ) : (
-              <Link
-                href="/login"
-                className="h-8 px-2.5 sm:h-9 sm:px-3 rounded-[3px] border border-white/20 bg-white/10 text-xs sm:text-sm text-white/85 hover:bg-white/15 transition-all inline-flex items-center"
-              >
-                Login
-              </Link>
+              <>
+                <PostColsStepper
+                  noun="Pages"
+                  postCols={postCols}
+                  onAdjust={onAdjustPostCols}
+                />
+                <Link
+                  href="/login"
+                  className="h-8 px-2.5 sm:h-9 sm:px-3 rounded-[3px] border border-white/20 bg-white/10 text-xs sm:text-sm text-white/85 hover:bg-white/15 transition-all inline-flex items-center"
+                >
+                  Login
+                </Link>
+              </>
             )}
           </nav>
         </div>

@@ -9,7 +9,7 @@ import { Edit2, LogOut, ChevronUp, ChevronDown } from 'lucide-react';
 export default function LoadingOwnerChrome({ email, variant = "dashboard" }) {
   const isPage = variant === "page";
 
-  // Page views always show the density control; owner chrome adds Edit/Logout.
+  // Both headers always show the density control; owner chrome adds Edit/Logout.
   const density = (
     <div
       className="flex flex-col overflow-hidden rounded-none border border-white/20 bg-white/10"
@@ -25,21 +25,27 @@ export default function LoadingOwnerChrome({ email, variant = "dashboard" }) {
   );
 
   if (!isPage) {
-    if (!email) return null;
+    // The dashboard header always shows the density control too; owner extras
+    // only when the snapshot says so.
     return (
       <div
         className="flex items-center gap-2 shrink-0 pointer-events-none"
         aria-hidden
       >
-        <div className="h-8 w-8 sm:h-9 sm:w-[67px] rounded-[3px] border border-white/20 bg-white/10 text-white/80 inline-flex items-center justify-center">
-          <span className="inline-flex items-center gap-1.5">
-            <Edit2 size={14} />
-            <span className="hidden sm:inline">Edit</span>
-          </span>
-        </div>
-        <div className="h-8 w-8 sm:h-9 sm:w-9 grid place-items-center rounded-[3px] border border-white/20 bg-white/10 text-white/80">
-          <LogOut size={15} />
-        </div>
+        {density}
+        {email ? (
+          <>
+            <div className="h-8 w-8 sm:h-9 sm:w-[67px] rounded-[3px] border border-white/20 bg-white/10 text-white/80 inline-flex items-center justify-center">
+              <span className="inline-flex items-center gap-1.5">
+                <Edit2 size={14} />
+                <span className="hidden sm:inline">Edit</span>
+              </span>
+            </div>
+            <div className="h-8 w-8 sm:h-9 sm:w-9 grid place-items-center rounded-[3px] border border-white/20 bg-white/10 text-white/80">
+              <LogOut size={15} />
+            </div>
+          </>
+        ) : null}
       </div>
     );
   }

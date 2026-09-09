@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Plus, Edit2, Eye, LogOut, ArrowLeft, ChevronUp, ChevronDown } from "lucide-react";
+import { Plus, Edit2, Eye, LogOut, ArrowLeft } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme, useThemeSync } from "@/context/ThemeContext";
@@ -44,6 +44,7 @@ import {
   resolveDefaultPostCols,
   writeStoredPostCols,
 } from "@/lib/postGrid";
+import PostColsStepper from "@/components/PostColsStepper";
 
 function hasVisiblePageInfo(value) {
   return Boolean(value && value !== "<p><br></p>" && value.trim() !== "");
@@ -495,32 +496,7 @@ export default function PageViewClient({
                 <span className="text-white/65 text-xs hidden md:block truncate max-w-[160px]">
                   {user.email}
                 </span>
-                <div
-                  className="flex flex-col overflow-hidden rounded-none border border-white/20 bg-white/10"
-                  role="group"
-                  aria-label="Posts per row"
-                >
-                  <button
-                    type="button"
-                    onClick={() => adjustPostCols(1)}
-                    disabled={postCols === POST_GRID_MAX}
-                    className="h-5 w-9 grid place-items-center text-white/80 hover:bg-white/15 hover:text-white disabled:opacity-35 disabled:hover:bg-transparent transition-colors"
-                    aria-label="More posts per row"
-                    title="More posts per row"
-                  >
-                    <ChevronUp size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => adjustPostCols(-1)}
-                    disabled={postCols === POST_GRID_MIN}
-                    className="h-5 w-9 grid place-items-center border-t border-white/20 text-white/80 hover:bg-white/15 hover:text-white disabled:opacity-35 disabled:hover:bg-transparent transition-colors"
-                    aria-label="Fewer posts per row"
-                    title="Fewer posts per row"
-                  >
-                    <ChevronDown size={16} />
-                  </button>
-                </div>
+                <PostColsStepper postCols={postCols} onAdjust={adjustPostCols} />
                 <button
                   type="button"
                   onClick={() => setIsEditMode((m) => !m)}
@@ -546,32 +522,7 @@ export default function PageViewClient({
                 </button>
               </>
             ) : (
-              <div
-                className="flex flex-col overflow-hidden rounded-none border border-white/20 bg-white/10"
-                role="group"
-                aria-label="Posts per row"
-              >
-                <button
-                  type="button"
-                  onClick={() => adjustPostCols(1)}
-                  disabled={postCols === POST_GRID_MAX}
-                  className="h-5 w-9 grid place-items-center text-white/80 hover:bg-white/15 hover:text-white disabled:opacity-35 disabled:hover:bg-transparent transition-colors"
-                  aria-label="More posts per row"
-                  title="More posts per row"
-                >
-                  <ChevronUp size={16} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => adjustPostCols(-1)}
-                  disabled={postCols === POST_GRID_MIN}
-                  className="h-5 w-9 grid place-items-center border-t border-white/20 text-white/80 hover:bg-white/15 hover:text-white disabled:opacity-35 disabled:hover:bg-transparent transition-colors"
-                  aria-label="Fewer posts per row"
-                  title="Fewer posts per row"
-                >
-                  <ChevronDown size={16} />
-                </button>
-              </div>
+              <PostColsStepper postCols={postCols} onAdjust={adjustPostCols} />
             )}
           </nav>
         </div>
