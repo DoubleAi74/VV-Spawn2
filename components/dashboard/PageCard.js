@@ -1,5 +1,6 @@
-import { useLayoutEffect, useRef, useState } from "react";
 "use client";
+
+import { useLayoutEffect, useRef, useState } from "react";
 
 import Link from "next/link";
 import {
@@ -38,31 +39,37 @@ export default function PageCard({
     buttonRef: deleteButtonRef,
   } = useArmedDelete();
   const isOptimistic = Boolean(page._optimistic);
-  const titleRef = useRef(null);
+  const titleBoxRef = useRef(null);
+  const measureRef = useRef(null);
   const [titleWraps, setTitleWraps] = useState(false);
 
   useLayoutEffect(() => {
-    const el = titleRef.current;
-    if (!el) return;
+    const box = titleBoxRef.current;
+    const probe = measureRef.current;
+    if (!box || !probe) return;
 
     const measure = () => {
-      // Always measure at text-sm so shrinking a wrapped title cannot
-      // flip it back to one line and oscillate the class.
-      el.style.fontSize = "0.875rem";
-      el.style.lineHeight = "1.375";
-      const lineHeight = parseFloat(getComputedStyle(el).lineHeight);
+      // Width of the text slot only (sibling of optional lock), not the whole row.
+      const slot = probe.parentElement;
+      const width = slot?.clientWidth ?? 0;
+      if (width <= 0) return;
+
+      probe.style.width = `${width}px`;
+      probe.style.fontSize = "0.875rem";
+      probe.style.lineHeight = "1.375";
+      const lh = parseFloat(getComputedStyle(probe).lineHeight);
       const wraps =
-        Number.isFinite(lineHeight) &&
-        lineHeight > 0 &&
-        el.scrollHeight > lineHeight * 1.5;
-      el.style.fontSize = "";
-      el.style.lineHeight = "";
+        Number.isFinite(lh) && lh > 0 && probe.scrollHeight > lh * 1.85;
+      probe.style.width = "";
+      probe.style.fontSize = "";
+      probe.style.lineHeight = "";
       setTitleWraps(wraps);
     };
 
     measure();
     const ro = new ResizeObserver(measure);
-    ro.observe(el);
+    ro.observe(box);
+    if (probe.parentElement) ro.observe(probe.parentElement);
     return () => ro.disconnect();
   }, [page.title]);
 
@@ -132,8 +139,11 @@ export default function PageCard({
         </div>
       )}
 
-      <div className="flex pl-1 pr-1 items-center justify-between gap-1 h-8 w-full overflow-hidden">
-        <div className="flex items-center gap-1 min-w-0 flex-1 h-full py-0.5">
+      <div className="flex pl-1 pr-1 items-center justify-between gap-1 h-9 w-full">
+        <div
+          ref={titleBoxRef}
+          className="relative flex items-center gap-1 min-w-0 flex-1 h-full py-0.5"
+        >
           {page.isPrivate && isOwner && (
             <Lock
               size={12}
@@ -141,21 +151,30 @@ export default function PageCard({
               aria-label="Private page"
             />
           )}
-          <h3
-            ref={titleRef}
-            className={`min-w-0 flex-1 font-bold text-black/90 group-hover:text-black line-clamp-2 break-words ${
-              titleWraps
-                ? "text-[11px] leading-tight"
-                : "text-sm leading-snug"
-            }`}
-            title={page.title}
-          >
-            {page.title}
-          </h3>
+          <div className="relative min-w-0 flex-1 h-full flex items-center">
+            <h3
+              className={`min-w-0 w-full font-bold text-black/90 group-hover:text-black line-clamp-2 break-words [overflow-wrap:anywhere] ${
+                titleWraps
+                  ? "text-xs leading-snug"
+                  : "text-sm leading-snug"
+              }`}
+              title={page.title}
+            >
+              {page.title}
+            </h3>
+            {/* Twin at text-sm without line-clamp: real wrap detection for this width. */}
+            <span
+              ref={measureRef}
+              aria-hidden
+              className="pointer-events-none invisible absolute left-0 top-0 -z-10 w-full font-bold text-sm leading-snug break-words [overflow-wrap:anywhere]"
+            >
+              {page.title}
+            </span>
+          </div>
         </div>
 
         {page.description && (
-          <p className="shrink-0 max-w-[45%] text-xs text-neutral-700/80 text-right leading-snug line-clamp-2">
+          <p className="shrink-0 max-w-[45%] self-center text-xs text-neutral-700/80 text-right leading-snug line-clamp-2">
             {page.description}
           </p>
         )}
