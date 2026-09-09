@@ -1,31 +1,43 @@
 import { auth } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
 import { updateUserDashboard } from '@/lib/data';
-import { normalizeInfoMode } from '@/lib/infoMode';
+import { DASHBOARD_INFO_FIELDS, normalizeInfoValues, parseInfoPatch } from '@/lib/infoFields';
+import { infoResponse } from '@/lib/infoResponse';
+import User from '@/lib/models/User';
+import { isObjectIdOrHexString } from 'mongoose';
 import { NextResponse } from 'next/server';
+
+export const dynamic = 'force-dynamic';
+
+// Profiles are public. Only the four public info fields leave this endpoint.
+export async function GET(request) {
+  const userId = new URL(request.url).searchParams.get('userId');
+  if (!isObjectIdOrHexString(userId)) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+  await connectDB();
+  const user = await User.findById(userId, {
+    'dashboard.infoText': 1, 'dashboard.infoMode': 1,
+    'dashboard.infoText1': 1, 'dashboard.infoMode1': 1,
+  }).lean();
+  if (!user) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  return infoResponse(request, normalizeInfoValues(user.dashboard, DASHBOARD_INFO_FIELDS));
+}
 
 export async function PATCH(request) {
   const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
+  if (!session?.user?.userId) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
 
-  await connectDB();
-  const { infoText, infoMode, infoText1, infoMode1 } = await request.json();
-  const stored = typeof infoText === 'string' ? infoText : '';
-  const stored1 = typeof infoText1 === 'string' ? infoText1 : '';
-  const mode = normalizeInfoMode(infoMode, stored);
-  const mode1 = normalizeInfoMode(infoMode1, stored1);
-  const updated = await updateUserDashboard(
-    session.user.userId,
-    stored,
-    mode,
-    stored1,
-    mode1,
-  );
+  let changes;
+  try {
+    changes = parseInfoPatch(await request.json(), DASHBOARD_INFO_FIELDS);
+  } catch (error) {
+    return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+  const updated = await updateUserDashboard(session.user.userId, changes);
+  if (!updated) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return NextResponse.json({
     success: true,
-    infoText: updated?.dashboard?.infoText ?? stored,
-    infoMode: updated?.dashboard?.infoMode ?? mode,
-    infoText1: updated?.dashboard?.infoText1 ?? stored1,
-    infoMode1: updated?.dashboard?.infoMode1 ?? mode1,
+    ...normalizeInfoValues(updated.dashboard, DASHBOARD_INFO_FIELDS),
   });
 }

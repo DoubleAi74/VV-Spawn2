@@ -39,6 +39,8 @@ import {
 } from "@/lib/routeTransitionCache";
 import { writeUpTarget } from "@/lib/upNavigation";
 import { normalizeInfoMode } from "@/lib/infoMode";
+import { DASHBOARD_INFO_FIELDS } from "@/lib/infoFields";
+import { useInfoSync } from "@/lib/useInfoSync";
 import DashHeader from "@/components/dashboard/DashHeader";
 import PageCard from "@/components/dashboard/PageCard";
 import DashboardInfoEditor from "@/components/dashboard/DashboardInfoEditor";
@@ -46,35 +48,6 @@ import CreatePageModal from "@/components/dashboard/CreatePageModal";
 import EditPageModal from "@/components/dashboard/EditPageModal";
 import EmptyAddButton from "@/components/EmptyAddButton";
 import { hasVisibleInfo } from "@/components/page/PageInfoView";
-
-function readSessionDraft(key, fallback) {
-  if (typeof window === "undefined" || !key) return fallback;
-  try {
-    const draft = window.sessionStorage.getItem(key);
-    return draft == null ? fallback : draft;
-  } catch {
-    return fallback;
-  }
-}
-
-function readSessionMode(key, savedMode, text) {
-  const serverMode = normalizeInfoMode(savedMode, text);
-  if (typeof window === "undefined" || !key) return serverMode;
-  try {
-    return normalizeInfoMode(window.sessionStorage.getItem(key), text);
-  } catch {
-    return serverMode;
-  }
-}
-
-function writeSession(key, value) {
-  if (!key || typeof window === "undefined") return;
-  try {
-    window.sessionStorage.setItem(key, value);
-  } catch {
-    /* ignore */
-  }
-}
 
 export default function DashboardViewClient({
   user,
@@ -124,40 +97,16 @@ export default function DashboardViewClient({
     (sessionUser?.userId && user?.id && sessionUser.userId === user.id) ||
     sessionUser?.usernameTag === user.usernameTag;
   const [isEditMode, setIsEditMode] = useState(false);
-  // Local copy: a first save used to write the API but never this prop, so
-  // leaving edit mode unmounted the editor (parent still saw empty infoText).
-  const infoStorageKey = user.usernameTag
-    ? `volvox:dashInfo:${user.usernameTag}`
-    : "";
-  const infoModeKey = user.usernameTag
-    ? `volvox:dashInfoMode:${user.usernameTag}`
-    : "";
-  const infoStorageKey1 = user.usernameTag
-    ? `volvox:dashInfo1:${user.usernameTag}`
-    : "";
-  const infoModeKey1 = user.usernameTag
-    ? `volvox:dashInfoMode1:${user.usernameTag}`
-    : "";
-  const [infoText, setInfoText] = useState(() =>
-    readSessionDraft(infoStorageKey, user.dashboard?.infoText || ""),
-  );
-  const [infoMode, setInfoMode] = useState(() =>
-    readSessionMode(
-      infoModeKey,
-      user.dashboard?.infoMode,
-      user.dashboard?.infoText || "",
-    ),
-  );
-  const [infoText1, setInfoText1] = useState(() =>
-    readSessionDraft(infoStorageKey1, user.dashboard?.infoText1 || ""),
-  );
-  const [infoMode1, setInfoMode1] = useState(() =>
-    readSessionMode(
-      infoModeKey1,
-      user.dashboard?.infoMode1,
-      user.dashboard?.infoText1 || "",
-    ),
-  );
+  const info = useInfoSync({
+    initialValues: user.dashboard,
+    fields: DASHBOARD_INFO_FIELDS,
+    readUrl: `/api/user/dashboard?userId=${encodeURIComponent(user.id)}`,
+    writeUrl: "/api/user/dashboard",
+    canEdit: isOwner,
+    isEditMode: isOwner && isEditMode,
+    storageKey: `volvox:infoDraft:dashboard:${user.id}`,
+  });
+  const { infoText, infoMode, infoText1, infoMode1 } = info.values;
   // The theme poll only has anything to report while its own colours can be
   // changed, which is the owner in edit mode and nobody else.
   useThemeSync(isOwner && isEditMode);
@@ -202,85 +151,6 @@ export default function DashboardViewClient({
     if (savedY == null) return;
     window.scrollTo({ top: savedY, behavior: "instant" });
   }, [initialPages]);
-
-  const persistInfoDraft = useCallback(
-    (next) => {
-      setInfoText(next);
-      writeSession(infoStorageKey, next);
-    },
-    [infoStorageKey],
-  );
-
-  const persistInfoMode = useCallback(
-    (next) => {
-      setInfoMode(next);
-      writeSession(infoModeKey, next);
-    },
-    [infoModeKey],
-  );
-
-  const persistInfoDraft1 = useCallback(
-    (next) => {
-      setInfoText1(next);
-      writeSession(infoStorageKey1, next);
-    },
-    [infoStorageKey1],
-  );
-
-  const persistInfoMode1 = useCallback(
-    (next) => {
-      setInfoMode1(next);
-      writeSession(infoModeKey1, next);
-    },
-    [infoModeKey1],
-  );
-
-  // ── Info text ──
-  async function handleSaveInfo(slot, nextInfoText, nextInfoMode) {
-    const payload = {
-      infoText,
-      infoMode,
-      infoText1,
-      infoMode1,
-    };
-    if (slot === "above") {
-      payload.infoText1 = nextInfoText;
-      payload.infoMode1 = nextInfoMode;
-    } else {
-      payload.infoText = nextInfoText;
-      payload.infoMode = nextInfoMode;
-    }
-
-    const res = await fetch("/api/user/dashboard", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error("Failed to save dashboard info");
-    const stored = await res.json().catch(() => ({}));
-    const clean =
-      typeof stored.infoText === "string" ? stored.infoText : payload.infoText;
-    const clean1 =
-      typeof stored.infoText1 === "string" ? stored.infoText1 : payload.infoText1;
-    const cleanMode = normalizeInfoMode(stored.infoMode, clean);
-    const cleanMode1 = normalizeInfoMode(stored.infoMode1, clean1);
-
-    setInfoText((current) => {
-      if (slot === "below" && current !== nextInfoText) return current;
-      writeSession(infoStorageKey, clean);
-      return clean;
-    });
-    setInfoText1((current) => {
-      if (slot === "above" && current !== nextInfoText) return current;
-      writeSession(infoStorageKey1, clean1);
-      return clean1;
-    });
-    persistInfoMode(cleanMode);
-    persistInfoMode1(cleanMode1);
-
-    if (slot === "above") return { infoText: clean1, infoMode: cleanMode1 };
-    return { infoText: clean, infoMode: cleanMode };
-  }
 
   // ── Create page ──
   const handleCreatePage = useCallback(
@@ -568,9 +438,10 @@ export default function DashboardViewClient({
               value={infoText1}
               mode={infoMode1}
               isEditMode={isOwner && isEditMode}
-              onChange={persistInfoDraft1}
-              onModeChange={persistInfoMode1}
-              onSave={(text, mode) => handleSaveInfo("above", text, mode)}
+              onChange={(text) => info.change("infoText1", text)}
+              onModeChange={(mode) => info.change("infoMode1", mode)}
+              statusLabel={info.statusFor("infoText1", "infoMode1")}
+              hasError={Boolean(info.error)}
               initialHeight={infoHeight1Ref.current}
               onHeight={handleAboveHeight}
             />
@@ -642,11 +513,12 @@ export default function DashboardViewClient({
               value={infoText}
               mode={infoMode}
               isEditMode={isOwner && isEditMode}
-              onChange={persistInfoDraft}
+              onChange={(text) => info.change("infoText", text)}
               initialHeight={infoHeightRef.current}
               onHeight={handleBelowHeight}
-              onModeChange={persistInfoMode}
-              onSave={(text, mode) => handleSaveInfo("below", text, mode)}
+              onModeChange={(mode) => info.change("infoMode", mode)}
+              statusLabel={info.statusFor("infoText", "infoMode")}
+              hasError={Boolean(info.error)}
             />
           </div>
         ) : null}

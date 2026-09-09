@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 import { getInfoPalette } from "@/lib/colour";
 import { useTheme } from "@/context/ThemeContext";
 import { INFO_MODE_HTML, INFO_MODE_TEXT } from "@/lib/infoMode";
@@ -18,66 +18,17 @@ export default function DashboardInfoEditor({
   isEditMode,
   onChange,
   onModeChange,
-  onSave,
+  statusLabel,
+  hasError,
   initialHeight,
   onHeight,
 }) {
   const { backHex } = useTheme();
-  const [savedValue, setSavedValue] = useState(value || "");
-  const [savedMode, setSavedMode] = useState(mode);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
   const palette = useMemo(() => getInfoPalette(backHex), [backHex]);
   const isHtml = mode === INFO_MODE_HTML;
 
-  const saveValue = useCallback(async () => {
-    if (value === savedValue && mode === savedMode) return;
-
-    setSaving(true);
-    setError("");
-    const sent = value;
-    const sentMode = mode;
-    try {
-      const stored = await onSave(sent, sentMode);
-      const clean =
-        stored && typeof stored.infoText === "string" ? stored.infoText : sent;
-      const nextMode =
-        stored?.infoMode === INFO_MODE_HTML ? INFO_MODE_HTML : sentMode;
-      setSavedValue(clean);
-      setSavedMode(nextMode);
-      if (value === sent && clean !== sent) onChange(clean);
-      if (mode === sentMode && nextMode !== sentMode) onModeChange(nextMode);
-    } catch {
-      setError("Failed to save. Try again.");
-    } finally {
-      setSaving(false);
-    }
-  }, [onSave, onChange, onModeChange, value, mode, savedValue, savedMode]);
-
-  useEffect(() => {
-    if (value === savedValue && mode === savedMode) return;
-    const timer = setTimeout(() => {
-      void saveValue();
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, [value, mode, savedValue, savedMode, saveValue]);
-
-  const saveValueRef = useRef(saveValue);
-  saveValueRef.current = saveValue;
-  const wasEditModeRef = useRef(isEditMode);
-  useEffect(() => {
-    if (wasEditModeRef.current && !isEditMode) {
-      void saveValueRef.current();
-    }
-    wasEditModeRef.current = isEditMode;
-  }, [isEditMode]);
-
   const hasContent = value && value !== "<p><br></p>" && value.trim() !== "";
-  const statusLabel = saving
-    ? "Saving..."
-    : error ||
-      (value === savedValue && mode === savedMode ? "Saved" : "Unsaved");
-  const statusStyles = error
+  const statusStyles = hasError
     ? {
         backgroundColor: palette.errorBackground,
         borderColor: palette.errorBorder,

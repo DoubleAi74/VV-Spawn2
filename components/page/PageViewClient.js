@@ -549,11 +549,13 @@ export default function PageViewClient({
       >
         <div className="max-w-7xl mx-auto w-full flex-1 flex flex-col min-h-0">
           <PageInfoEditor
+            key={page._id}
             pageId={page._id}
             initialText1={page.pageMetaData?.infoText1 || ""}
             initialText2={page.pageMetaData?.infoText2 || ""}
             initialMode={page.pageMetaData?.infoMode}
             initialMode1={page.pageMetaData?.infoMode1}
+            canEdit={Boolean(isOwner)}
             isEditMode={isOwner && isEditMode}
             onHasContentChange={setHasPageInfoContent}
             onAboveMeta={handleAboveMeta}

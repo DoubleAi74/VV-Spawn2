@@ -63,6 +63,7 @@ async function DashboardBody({ usernameTag }) {
       storageKey={user.usernameTag}
     >
       <DashboardViewClient
+        key={publicUser.id}
         user={publicUser}
         initialPages={serialisedPages}
         isOwner={isOwner}
