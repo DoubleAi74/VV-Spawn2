@@ -10,6 +10,10 @@ import {
 } from "lucide-react";
 import PageCardSurface from "@/components/dashboard/PageCardSurface";
 import { useArmedDelete } from "@/lib/useArmedDelete";
+import {
+  shouldRouteOnPress,
+  shouldSeedOnPress,
+} from "@/lib/pressNavigation";
 
 export default function PageCard({
   page,
@@ -41,20 +45,19 @@ export default function PageCard({
     onNavigate?.();
   }
 
+  /**
+   * Mouse only, and that is the whole point — see `lib/pressNavigation.js`.
+   *
+   * Opening on press keeps `loading.js` from being gated behind the release,
+   * which is free for a mouse and ruinous for a finger: `pointerdown` fires
+   * before the browser knows whether the press is a tap or the start of a
+   * scroll, so routing there made the dashboard un-scrollable on a phone.
+   * Touch and pen wait for `click`, which the browser withholds when the press
+   * turns into a scroll, and which `<Link>` handles for us.
+   */
   function handlePointerDown(event) {
-    handleNavigate();
-    if (
-      !href ||
-      event.button !== 0 ||
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey
-    ) {
-      return;
-    }
-    // Start the route on press, not on release, so loading.js is not gated
-    // behind the click. Modified clicks stay with the <Link> (new tab).
+    if (shouldSeedOnPress(event)) handleNavigate();
+    if (!href || !shouldRouteOnPress(event)) return;
     onOpen?.();
   }
 
