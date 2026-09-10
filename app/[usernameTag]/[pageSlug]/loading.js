@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useParams } from "next/navigation";
-import ImageWithLoader from "@/components/ImageWithLoader";
+import PostCardSurface from "@/components/page/PostCardSurface";
 import {
   getPageSnapshot,
   setPageSnapshot,
@@ -16,50 +16,6 @@ import { postGridClassFor } from "@/lib/postGrid";
 // What the local copies fell back to before FND-2.
 const LOADING_FALLBACK_HEX = "#2d3e50";
 const LOADING_RGBA_FALLBACK_HEX = "#e5e7eb";
-
-function PostLoadingCard({ post, priority = false }) {
-  const title = post?.title || "";
-  const thumbnail = post?.thumbnail || "";
-  const blurDataURL = post?.blurDataURL || "";
-
-  return (
-    <div className="w-full min-w-0 max-w-full overflow-hidden p-1 rounded-[2px] bg-neutral-200/60 shadow-lg border-[2px] border-neutral-900/25 h-full flex flex-col">
-      <div
-        className="w-full aspect-[4/3] rounded-sm overflow-hidden relative"
-        style={{
-          backgroundImage: blurDataURL ? `url("${blurDataURL}")` : undefined,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundColor: !blurDataURL ? "#a3a3a3" : undefined,
-        }}
-      >
-        {thumbnail ? (
-          <ImageWithLoader
-            src={thumbnail}
-            alt={title || "Post preview"}
-            blurDataURL={blurDataURL}
-            fill
-            priority={priority}
-            className="object-cover"
-          />
-        ) : (
-          <>
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-neutral-100/10 to-transparent [animation:shimmer_1.5s_linear_infinite]" />
-            <div className="absolute inset-0 bg-neutral-200/30 animate-pulse" />
-          </>
-        )}
-      </div>
-
-      <div className="px-1 pt-[4px] w-full min-w-0 max-w-full overflow-hidden">
-        <div className="block truncate text-xs font-bold text-neutral-800/85">
-          {title || (
-            <span className="inline-block h-3 w-3/5 rounded-[2px] bg-neutral-800/10 align-middle" />
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function PageViewLoading() {
   const params = useParams();
@@ -162,10 +118,11 @@ export default function PageViewLoading() {
           {posts.length > 0 ? (
             <div className={`grid ${postGridClass} gap-[7px] sm:gap-4`}>
               {posts.map((post, index) => (
-                <PostLoadingCard
+                <PostCardSurface
                   key={post._id || `skeleton-${index}`}
                   post={post}
                   priority={index < 4}
+                  aria-busy="true"
                 />
               ))}
             </div>

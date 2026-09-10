@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, RotateCcw } from "lucide-react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { POST_GRID_MAX, POST_GRID_MIN } from "@/lib/postGrid";
 
 /**
@@ -8,7 +8,7 @@ import { POST_GRID_MAX, POST_GRID_MIN } from "@/lib/postGrid";
  */
 export default function PostColsStepper({
   postCols, onAdjust, noun = "Posts", maxCols = POST_GRID_MAX,
-  onReset, resetLabel = 'Use automatic layout', statusText = '',
+  statusText = '',
 }) {
   return (
     <div
@@ -38,17 +38,6 @@ export default function PostColsStepper({
           <ChevronDown size={16} />
         </button>
       </div>
-      {onReset && (
-        <button
-          type="button"
-          onClick={onReset}
-          aria-label={resetLabel}
-          title={resetLabel}
-          className="h-8 w-6 grid place-items-center text-white/65 hover:text-white transition-colors"
-        >
-          <RotateCcw size={13} />
-        </button>
-      )}
       <span role="status" className="sr-only">{statusText}</span>
     </div>
   );

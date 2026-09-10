@@ -1,16 +1,13 @@
 "use client";
 
 import {
-  Link2,
-  FileText,
   ChevronLeft,
   ChevronRight,
   Pencil,
   Trash2,
-  Loader2,
   X,
 } from "lucide-react";
-import ImageWithLoader from "@/components/ImageWithLoader";
+import PostCardSurface from "@/components/page/PostCardSurface";
 import { useArmedDelete } from "@/lib/useArmedDelete";
 
 /** Same destination the lightbox Open control uses (modal stays download-only). */
@@ -46,61 +43,6 @@ export default function PostCard({
   const isOptimistic = Boolean(post._optimistic);
   const openUrl = postOpenUrl(post);
 
-  function renderThumbnail() {
-    if (isOptimistic && !post.thumbnail && !post.blurDataURL) {
-      return (
-        <div className="w-full h-full flex items-center justify-center">
-          <Loader2 size={24} className="text-neutral-200/70 animate-spin" />
-        </div>
-      );
-    }
-
-    if (post.thumbnail) {
-      return (
-        <ImageWithLoader
-          src={post.thumbnail}
-          alt={post.title || ""}
-          blurDataURL={post.blurDataURL}
-          fill
-          priority={priority}
-          className="object-cover"
-        />
-      );
-    }
-
-    if (post.content_type === "url") {
-      return (
-        <div className="w-full h-full bg-neutral-200/70 flex items-center justify-center">
-          <Link2 size={28} className="text-neutral-600" />
-        </div>
-      );
-    }
-
-    if (post.content_type === "text") {
-      return (
-        <div className="w-full h-full bg-neutral-200/70 flex items-center justify-center">
-          <FileText size={28} className="text-neutral-600" />
-        </div>
-      );
-    }
-
-    if (post.content_type === "file") {
-      return (
-        <div className="w-full h-full bg-neutral-200/70 flex items-center justify-center">
-          <FileText size={28} className="text-neutral-600" />
-        </div>
-      );
-    }
-
-    return (
-      <div className="w-full h-full bg-neutral-200/70 flex items-center justify-center">
-        <span className="text-neutral-600 text-2xl">
-          {post.title?.[0]?.toUpperCase() || "?"}
-        </span>
-      </div>
-    );
-  }
-
   const handleClick = () => {
     if (!onClick) return;
     onClick(post);
@@ -111,47 +53,21 @@ export default function PostCard({
       className={`group relative min-w-0 w-full transition-opacity duration-200 ${isOptimistic ? "opacity-75" : "opacity-100"}`}
       onPointerLeave={handlePointerLeave}
     >
-      <button
+      <PostCardSurface
+        as="button"
+        post={post}
+        priority={priority}
         type="button"
         disabled={isOptimistic}
         onClick={handleClick}
-        className={`w-full min-w-0 max-w-full overflow-hidden p-1 rounded-[2px] bg-white/70 shadow-lg border-[2px] border-neutral-900/25 transition-[color,background-color,transform,opacity] duration-[60ms] ease-out h-full flex flex-col text-left text-neutral-800/80 ${
+        className={`transition-[color,background-color,transform,opacity] duration-[60ms] ease-out ${
           isOptimistic
             ? "cursor-default"
             : "cursor-pointer hover:bg-white/80 hover:text-neutral-900 focus-visible:ring-2 focus-visible:ring-neutral-700 active:scale-[0.995] active:opacity-80"
         }`}
         aria-label={`Open: ${post.title || post.content_type}`}
         aria-disabled={isOptimistic}
-      >
-        <div
-          className="w-full aspect-[4/3] rounded-sm overflow-hidden relative"
-          style={{
-            backgroundImage: post.blurDataURL
-              ? `url("${post.blurDataURL}")`
-              : undefined,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-            backgroundColor: !post.blurDataURL ? "#a3a3a3" : undefined,
-          }}
-        >
-          {renderThumbnail()}
-
-          {isOptimistic && post.blurDataURL && !post.thumbnail && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-8 h-8 border-2 border-neutral-200/30 border-t-white/40 rounded-full animate-spin" />
-            </div>
-          )}
-        </div>
-
-        <div className="px-1 pt-[4px] w-full min-w-0 max-w-full overflow-hidden">
-          <div
-            className="block truncate text-xs font-bold text-black/90 group-hover:text-black"
-            title={post.title || undefined}
-          >
-            {post.title || "\u00A0"}
-          </div>
-        </div>
-      </button>
+      />
 
       {openUrl && !isOptimistic && (
         <div className="absolute top-[6px] left-[6px] right-[6px] aspect-[4/3] z-20 pointer-events-none">

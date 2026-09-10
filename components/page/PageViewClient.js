@@ -493,7 +493,6 @@ export default function PageViewClient({
                 </span>
                 <PostColsStepper
                   postCols={grid.postCols} maxCols={grid.maxCols} onAdjust={grid.adjust}
-                  onReset={grid.canReset ? grid.reset : undefined} resetLabel={grid.resetLabel}
                   statusText={gridStatus}
                 />
                 <button
@@ -523,7 +522,6 @@ export default function PageViewClient({
             ) : (
               <PostColsStepper
                 postCols={grid.postCols} maxCols={grid.maxCols} onAdjust={grid.adjust}
-                onReset={grid.canReset ? grid.reset : undefined} resetLabel={grid.resetLabel}
               />
             )}
           </nav>

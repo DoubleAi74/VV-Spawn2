@@ -8,7 +8,7 @@
 
 import { useEffect } from "react";
 import { useParams } from "next/navigation";
-import ImageWithLoader from "@/components/ImageWithLoader";
+import PageCardSurface from "@/components/dashboard/PageCardSurface";
 import { postGridClassFor } from "@/lib/postGrid";
 import {
   getDashboardSnapshot,
@@ -21,54 +21,6 @@ import PageInfoView, { hasVisibleInfo } from "@/components/page/PageInfoView";
 
 // What the local copy of lighten() fell back to before FND-2.
 const LOADING_FALLBACK_HEX = "#2d3e50";
-
-function DashboardLoadingCard({ page, priority = false }) {
-  const title = page?.title || "";
-  const thumbnail = page?.thumbnail || "";
-  const blurDataURL = page?.blurDataURL || "";
-
-  return (
-    <div className="p-2 pb-[3px] rounded-[2px] border-[2px] border-neutral-900/25 bg-neutral-200/60 shadow-md h-full">
-      <div
-        className="w-full aspect-[4/3] mb-1 rounded-sm overflow-hidden relative"
-        style={{
-          backgroundImage: blurDataURL ? `url("${blurDataURL}")` : undefined,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundColor: !blurDataURL ? "#d4d4d8" : undefined,
-        }}
-      >
-        {thumbnail ? (
-          <ImageWithLoader
-            src={thumbnail}
-            alt={title || "Page preview"}
-            blurDataURL={blurDataURL}
-            fill
-            priority={priority}
-            className="object-cover"
-          />
-        ) : (
-          <>
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-neutral-100/10 to-transparent [animation:shimmer_1.5s_linear_infinite]" />
-            <div className="absolute inset-0 bg-neutral-200/30 animate-pulse" />
-          </>
-        )}
-      </div>
-      <div className="flex pl-1 pr-1 items-center justify-between gap-1 h-8 w-full overflow-hidden">
-        {title ? (
-          <h3
-            className="min-w-0 truncate font-bold text-neutral-800/90 text-sm"
-            title={title}
-          >
-            {title}
-          </h3>
-        ) : (
-          <div className="h-4 w-3/5 bg-neutral-800/10 rounded-sm" />
-        )}
-      </div>
-    </div>
-  );
-}
 
 export default function DashboardSkeleton() {
   const params = useParams();
@@ -170,10 +122,12 @@ export default function DashboardSkeleton() {
         {pages.length > 0 ? (
           <div className={`grid ${postGridClass} gap-[7px] sm:gap-4`}>
             {pages.map((page, index) => (
-              <DashboardLoadingCard
+              <PageCardSurface
                 key={page._id || `skeleton-${index}`}
                 page={page}
+                isOwner={snapshot?.isOwner}
                 priority={index < 4}
+                aria-busy="true"
               />
             ))}
           </div>

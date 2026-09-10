@@ -321,6 +321,8 @@ export default function DashboardViewClient({
       pages: visiblePages.slice(0, 20).map((page) => ({
         _id: page._id,
         title: page.title || "",
+        description: page.description || "",
+        isPrivate: Boolean(page.isPrivate),
         thumbnail: page.thumbnail || "",
         blurDataURL: page.blurDataURL || "",
         slug: page.slug || "",

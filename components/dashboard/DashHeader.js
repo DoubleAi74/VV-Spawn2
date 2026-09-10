@@ -198,8 +198,6 @@ export default function DashHeader({
                   postCols={grid.postCols}
                   maxCols={grid.maxCols}
                   onAdjust={grid.adjust}
-                  onReset={grid.canReset ? grid.reset : undefined}
-                  resetLabel={grid.resetLabel}
                   statusText={statusText}
                 />
                 <button
@@ -236,8 +234,6 @@ export default function DashHeader({
                   postCols={grid.postCols}
                   maxCols={grid.maxCols}
                   onAdjust={grid.adjust}
-                  onReset={grid.canReset ? grid.reset : undefined}
-                  resetLabel={grid.resetLabel}
                 />
                 <Link
                   href="/login"
