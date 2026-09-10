@@ -343,7 +343,8 @@ export default function DashboardViewClient({
     visiblePages,
   ]);
 
-  useEffect(() => {
+  // Keep loading widths current before navigation can paint its fallback.
+  useLayoutEffect(() => {
     writeDashboardSnapshot();
   }, [writeDashboardSnapshot]);
 

@@ -216,7 +216,8 @@ export default function PageViewClient({
     posts,
   ]);
 
-  useEffect(() => {
+  // Keep loading widths current before navigation can paint its fallback.
+  useLayoutEffect(() => {
     writePageSnapshot();
   }, [writePageSnapshot]);
 

@@ -14,6 +14,7 @@ import {
   getDashboardSnapshot,
   setDashboardSnapshot,
 } from "@/lib/routeTransitionCache";
+import { useDashboardSnapshot } from "@/lib/useRouteSnapshot";
 import { normalizeHex, lighten } from "@/lib/colour";
 import { readPersistedTheme } from "@/context/ThemeContext";
 import LoadingOwnerChrome from "@/components/LoadingOwnerChrome";
@@ -26,7 +27,7 @@ export default function DashboardSkeleton() {
   const params = useParams();
   const usernameTag =
     typeof params?.usernameTag === "string" ? params.usernameTag : "";
-  const snapshot = getDashboardSnapshot(usernameTag);
+  const snapshot = useDashboardSnapshot(usernameTag);
   const persisted = readPersistedTheme(usernameTag);
 
   useEffect(() => {

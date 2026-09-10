@@ -7,6 +7,7 @@ import {
   getPageSnapshot,
   setPageSnapshot,
 } from "@/lib/routeTransitionCache";
+import { usePageSnapshot } from "@/lib/useRouteSnapshot";
 import { normalizeHex, lighten, hexToRgba } from "@/lib/colour";
 import { readPersistedTheme } from "@/context/ThemeContext";
 import LoadingOwnerChrome from "@/components/LoadingOwnerChrome";
@@ -22,7 +23,7 @@ export default function PageViewLoading() {
   const usernameTag =
     typeof params?.usernameTag === "string" ? params.usernameTag : "";
   const pageSlug = typeof params?.pageSlug === "string" ? params.pageSlug : "";
-  const snapshot = getPageSnapshot(usernameTag, pageSlug);
+  const snapshot = usePageSnapshot(usernameTag, pageSlug);
   const persisted = readPersistedTheme(usernameTag);
 
   useEffect(() => {
