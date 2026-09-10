@@ -22,15 +22,7 @@ import {
 } from "@/lib/preserveScroll";
 import { useQueue } from "@/lib/useQueue";
 import { focusRingOn } from "@/lib/colour";
-import {
-  DASH_GRID_STORAGE_KEY,
-  POST_GRID_MAX,
-  POST_GRID_MIN,
-  postGridClassFor,
-  readStoredPostCols,
-  resolveDefaultPostCols,
-  writeStoredPostCols,
-} from "@/lib/postGrid";
+import { useGridColumns } from "@/lib/useGridColumns";
 import {
   getDashboardSnapshot,
   getPageSnapshot,
@@ -115,25 +107,15 @@ export default function DashboardViewClient({
   const [editingPage, setEditingPage] = useState(null);
   const prefetchedRoutesRef = useRef(new Set());
 
-  // Cards-per-row preference; null means "follow the responsive default".
-  const [postCols, setPostCols] = useState(null);
-  useLayoutEffect(() => {
-    setPostCols(readStoredPostCols(DASH_GRID_STORAGE_KEY));
-  }, []);
-
-  const adjustPostCols = useCallback((delta) => {
-    setPostCols((current) => {
-      const base = current ?? resolveDefaultPostCols();
-      const next = Math.min(
-        POST_GRID_MAX,
-        Math.max(POST_GRID_MIN, base + delta),
-      );
-      writeStoredPostCols(next, DASH_GRID_STORAGE_KEY);
-      return next;
-    });
-  }, []);
-
-  const postGridClass = postGridClassFor(postCols);
+  const grid = useGridColumns({
+    resourceKey: `dashboard:${user.id}`,
+    isOwner,
+    sharedCols: info.values.gridCols,
+    onSharedChange: (cols) => info.change('gridCols', cols),
+  });
+  const gridStatus = info.pending.includes('gridCols')
+    ? info.error ? 'Layout not saved' : 'Saving layout...'
+    : '';
 
   useLayoutEffect(() => {
     if (
@@ -327,6 +309,7 @@ export default function DashboardViewClient({
       usernameTitle: user.usernameTitle || "",
       email: user.email || "",
       isOwner,
+      gridCols: grid.preferredCols,
       dashHex,
       backHex,
       infoText1,
@@ -348,6 +331,7 @@ export default function DashboardViewClient({
     user?.usernameTitle,
     user?.email,
     isOwner,
+    grid.preferredCols,
     dashHex,
     backHex,
     infoText1,
@@ -417,11 +401,10 @@ export default function DashboardViewClient({
           email={user.email}
           isOwner={isOwner}
           isEditMode={isEditMode}
-          statusText={isSyncing ? "Saving..." : ""}
+          statusText={gridStatus || (isSyncing ? "Saving..." : "")}
           onToggleEdit={() => setIsEditMode((m) => !m)}
           onTitleSave={(newTag) => router.replace(`/${newTag}`)}
-          postCols={postCols}
-          onAdjustPostCols={adjustPostCols}
+          grid={grid}
         />
       </div>
 
@@ -456,7 +439,7 @@ export default function DashboardViewClient({
             />
           </div>
         ) : (
-          <div className={`grid ${postGridClass} gap-[7px] sm:gap-4`}>
+          <div className={`grid ${grid.gridClass} gap-[7px] sm:gap-4`}>
             {visiblePages.map((page, idx) => (
               <PageCard
                 key={page._id}
@@ -474,6 +457,9 @@ export default function DashboardViewClient({
                     pageTitle: page.title || existing?.pageTitle || "",
                     userEmail: user.email || existing?.userEmail || "",
                     isOwner,
+                    gridCols: existing && 'gridCols' in existing
+                      ? existing.gridCols
+                      : page.pageMetaData?.gridCols ?? null,
                     dashHex,
                     backHex,
                     infoText1,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect } from "react";
 import { useParams } from "next/navigation";
 import ImageWithLoader from "@/components/ImageWithLoader";
 import {
@@ -11,7 +11,7 @@ import { normalizeHex, lighten, hexToRgba } from "@/lib/colour";
 import { readPersistedTheme } from "@/context/ThemeContext";
 import LoadingOwnerChrome from "@/components/LoadingOwnerChrome";
 import PageInfoView, { hasVisibleInfo } from "@/components/page/PageInfoView";
-import { postGridClassFor, readStoredPostCols } from "@/lib/postGrid";
+import { postGridClassFor } from "@/lib/postGrid";
 
 // What the local copies fell back to before FND-2.
 const LOADING_FALLBACK_HEX = "#2d3e50";
@@ -87,13 +87,7 @@ export default function PageViewLoading() {
     "#cccccc",
   );
   const posts = snapshot?.posts?.length ? snapshot.posts : [];
-  const [postCols, setPostCols] = useState(null);
-
-  useLayoutEffect(() => {
-    setPostCols(readStoredPostCols());
-  }, []);
-
-  const postGridClass = postGridClassFor(postCols);
+  const postGridClass = postGridClassFor(snapshot?.gridCols);
 
   return (
     <div

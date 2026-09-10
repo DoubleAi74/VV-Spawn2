@@ -54,8 +54,7 @@ export default function DashHeader({
   statusText,
   onToggleEdit,
   onTitleSave,
-  postCols,
-  onAdjustPostCols,
+  grid,
 }) {
   const { dashHex, backHex, setDashHex, setBackHex } = useTheme();
   const { showError } = useToast();
@@ -196,8 +195,12 @@ export default function DashHeader({
                 )}
                 <PostColsStepper
                   noun="Pages"
-                  postCols={postCols}
-                  onAdjust={onAdjustPostCols}
+                  postCols={grid.postCols}
+                  maxCols={grid.maxCols}
+                  onAdjust={grid.adjust}
+                  onReset={grid.canReset ? grid.reset : undefined}
+                  resetLabel={grid.resetLabel}
+                  statusText={statusText}
                 />
                 <button
                   type="button"
@@ -230,8 +233,11 @@ export default function DashHeader({
               <>
                 <PostColsStepper
                   noun="Pages"
-                  postCols={postCols}
-                  onAdjust={onAdjustPostCols}
+                  postCols={grid.postCols}
+                  maxCols={grid.maxCols}
+                  onAdjust={grid.adjust}
+                  onReset={grid.canReset ? grid.reset : undefined}
+                  resetLabel={grid.resetLabel}
                 />
                 <Link
                   href="/login"

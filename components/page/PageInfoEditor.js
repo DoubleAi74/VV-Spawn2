@@ -7,8 +7,6 @@ import {
   INFO_MODE_HTML,
   INFO_MODE_TEXT,
 } from "@/lib/infoMode";
-import { PAGE_INFO_FIELDS } from "@/lib/infoFields";
-import { useInfoSync } from "@/lib/useInfoSync";
 import PageInfoView, { hasVisibleInfo } from "@/components/page/PageInfoView";
 
 function HtmlInfoEditor({
@@ -107,12 +105,7 @@ function HtmlInfoEditor({
 }
 
 export default function PageInfoEditor({
-  pageId,
-  initialText1,
-  initialText2,
-  initialMode,
-  initialMode1,
-  canEdit,
+  info,
   isEditMode,
   onHasContentChange,
   onAboveMeta,
@@ -121,20 +114,6 @@ export default function PageInfoEditor({
   children,
 }) {
   const { backHex } = useTheme();
-  const info = useInfoSync({
-    initialValues: {
-      infoText1: initialText1,
-      infoText2: initialText2,
-      infoMode: initialMode,
-      infoMode1: initialMode1,
-    },
-    fields: PAGE_INFO_FIELDS,
-    readUrl: `/api/pages/${pageId}/meta`,
-    writeUrl: `/api/pages/${pageId}/meta`,
-    canEdit,
-    isEditMode,
-    storageKey: `volvox:infoDraft:page:${pageId}`,
-  });
   const { infoText1: text1, infoText2: text2, infoMode1: mode1, infoMode: mode2 } = info.values;
   const palette = useMemo(() => getInfoPalette(backHex), [backHex]);
 

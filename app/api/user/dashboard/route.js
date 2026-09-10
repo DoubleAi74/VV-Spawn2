@@ -9,7 +9,7 @@ import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-// Profiles are public. Only the four public info fields leave this endpoint.
+// Profiles are public. Only public info and layout settings leave this endpoint.
 export async function GET(request) {
   const userId = new URL(request.url).searchParams.get('userId');
   if (!isObjectIdOrHexString(userId)) {
@@ -19,6 +19,7 @@ export async function GET(request) {
   const user = await User.findById(userId, {
     'dashboard.infoText': 1, 'dashboard.infoMode': 1,
     'dashboard.infoText1': 1, 'dashboard.infoMode1': 1,
+    'dashboard.gridCols': 1,
   }).lean();
   if (!user) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return infoResponse(request, normalizeInfoValues(user.dashboard, DASHBOARD_INFO_FIELDS));

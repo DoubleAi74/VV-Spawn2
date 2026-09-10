@@ -36,14 +36,9 @@ import BulkUploadModal from "@/components/page/BulkUploadModal";
 import PhotoShowModal from "@/components/page/PhotoShowModal";
 import EmptyAddButton from "@/components/EmptyAddButton";
 import { focusRingOn, hexToRgba, lighten, readableInkOn } from "@/lib/colour";
-import {
-  POST_GRID_MAX,
-  POST_GRID_MIN,
-  postGridClassFor,
-  readStoredPostCols,
-  resolveDefaultPostCols,
-  writeStoredPostCols,
-} from "@/lib/postGrid";
+import { useGridColumns } from "@/lib/useGridColumns";
+import { PAGE_INFO_FIELDS } from "@/lib/infoFields";
+import { useInfoSync } from "@/lib/useInfoSync";
 import PostColsStepper from "@/components/PostColsStepper";
 
 function hasVisiblePageInfo(value) {
@@ -96,6 +91,25 @@ export default function PageViewClient({
   const isOwner =
     serverIsOwner || sessionUser?.usernameTag === user.usernameTag;
   const [isEditMode, setIsEditMode] = useState(false);
+  // Text, HTML modes and grid density share one read/write coordinator.
+  const info = useInfoSync({
+    initialValues: page.pageMetaData,
+    fields: PAGE_INFO_FIELDS,
+    readUrl: `/api/pages/${page._id}/meta`,
+    writeUrl: `/api/pages/${page._id}/meta`,
+    canEdit: Boolean(isOwner),
+    isEditMode: isOwner && isEditMode,
+    storageKey: `volvox:infoDraft:page:${page._id}`,
+  });
+  const grid = useGridColumns({
+    resourceKey: `page:${page._id}`,
+    isOwner,
+    sharedCols: info.values.gridCols,
+    onSharedChange: (cols) => info.change('gridCols', cols),
+  });
+  const gridStatus = info.pending.includes('gridCols')
+    ? info.error ? 'Layout not saved' : 'Saving layout...'
+    : '';
   // The theme poll only has anything to report while its own colours can be
   // changed, which is the owner in edit mode and nobody else.
   useThemeSync(isOwner && isEditMode);
@@ -105,8 +119,6 @@ export default function PageViewClient({
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [bulkFiles, setBulkFiles] = useState([]);
   const [lightboxPost, setLightboxPost] = useState(null);
-  // null = responsive default (2 / 3 / 4). A number locks the column count.
-  const [postCols, setPostCols] = useState(null);
 
   const [hasPageInfoContent, setHasPageInfoContent] = useState(() =>
     hasVisiblePageInfo(page.pageMetaData?.infoText2 || "") ||
@@ -178,6 +190,7 @@ export default function PageViewClient({
       pageTitle: page.title || "",
       userEmail: user.email || "",
       isOwner,
+      gridCols: grid.preferredCols,
       dashHex,
       backHex,
       infoText1: above.text || "",
@@ -195,6 +208,7 @@ export default function PageViewClient({
     user?.usernameTag,
     user?.email,
     isOwner,
+    grid.preferredCols,
     page?.slug,
     page?.title,
     dashHex,
@@ -413,25 +427,6 @@ export default function PageViewClient({
   }
 
 
-  // Layout effect so a stored density applies before first paint (matches loading.js).
-  useLayoutEffect(() => {
-    setPostCols(readStoredPostCols());
-  }, []);
-
-  const adjustPostCols = useCallback((delta) => {
-    setPostCols((current) => {
-      const base = current ?? resolveDefaultPostCols();
-      const next = Math.min(
-        POST_GRID_MAX,
-        Math.max(POST_GRID_MIN, base + delta),
-      );
-      writeStoredPostCols(next);
-      return next;
-    });
-  }, []);
-
-  const postGridClass = postGridClassFor(postCols);
-
   const reserveHiddenInfoSpace = isOwner && !isEditMode && !hasPageInfoContent;
 
   return (
@@ -488,15 +483,19 @@ export default function PageViewClient({
           >
             {isOwner ? (
               <>
-                {isSyncing && (
+                {(isSyncing || gridStatus) && (
                   <span className="text-white/60 text-xs hidden sm:block">
-                    Saving...
+                    {gridStatus || 'Saving...'}
                   </span>
                 )}
                 <span className="text-white/65 text-xs hidden md:block truncate max-w-[160px]">
                   {user.email}
                 </span>
-                <PostColsStepper postCols={postCols} onAdjust={adjustPostCols} />
+                <PostColsStepper
+                  postCols={grid.postCols} maxCols={grid.maxCols} onAdjust={grid.adjust}
+                  onReset={grid.canReset ? grid.reset : undefined} resetLabel={grid.resetLabel}
+                  statusText={gridStatus}
+                />
                 <button
                   type="button"
                   onClick={() => setIsEditMode((m) => !m)}
@@ -522,7 +521,10 @@ export default function PageViewClient({
                 </button>
               </>
             ) : (
-              <PostColsStepper postCols={postCols} onAdjust={adjustPostCols} />
+              <PostColsStepper
+                postCols={grid.postCols} maxCols={grid.maxCols} onAdjust={grid.adjust}
+                onReset={grid.canReset ? grid.reset : undefined} resetLabel={grid.resetLabel}
+              />
             )}
           </nav>
         </div>
@@ -549,13 +551,7 @@ export default function PageViewClient({
       >
         <div className="max-w-7xl mx-auto w-full flex-1 flex flex-col min-h-0">
           <PageInfoEditor
-            key={page._id}
-            pageId={page._id}
-            initialText1={page.pageMetaData?.infoText1 || ""}
-            initialText2={page.pageMetaData?.infoText2 || ""}
-            initialMode={page.pageMetaData?.infoMode}
-            initialMode1={page.pageMetaData?.infoMode1}
-            canEdit={Boolean(isOwner)}
+            info={info}
             isEditMode={isOwner && isEditMode}
             onHasContentChange={setHasPageInfoContent}
             onAboveMeta={handleAboveMeta}
@@ -573,7 +569,7 @@ export default function PageViewClient({
                     />
                   </div>
                 ) : (
-                  <div className={`grid ${postGridClass} gap-[7px] sm:gap-4`}>
+                  <div className={`grid ${grid.gridClass} gap-[7px] sm:gap-4`}>
                     {posts.map((post, idx) => (
                       <PostCard
                         key={post._id}

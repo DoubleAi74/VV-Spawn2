@@ -99,6 +99,7 @@ export default async function PageViewPage({ params }) {
       storageKey={user.usernameTag}
     >
       <PageViewClient
+        key={String(page._id)}
         user={publicUser}
         page={serialisedPage}
         initialPosts={serialisedPosts}
