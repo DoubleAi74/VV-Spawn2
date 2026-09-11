@@ -31,6 +31,7 @@ export default function PageInfoView({
     return (
       <section className={className}>
         <EmbeddedHtmlFrame
+          key={value}
           html={value}
           title={title}
           initialHeight={initialHeight}

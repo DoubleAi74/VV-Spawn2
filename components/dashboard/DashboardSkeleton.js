@@ -93,7 +93,7 @@ export default function DashboardSkeleton() {
       </header>
 
       <main
-        className={`w-full flex flex-col px-[10px] md:px-8 pb-72 ${
+        className={`info-layout w-full flex flex-col px-[10px] md:px-8 pb-72 ${
           pages.length > 0 && hasVisibleInfo(snapshot?.infoText1)
             ? "pt-[1.8rem]"
             : "pt-[calc(1.8rem*1.53)]"

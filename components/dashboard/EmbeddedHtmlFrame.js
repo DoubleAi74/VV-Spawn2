@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { fitHtmlFrame } from '@/lib/fitHtmlFrame';
 
 const BLANK_BASE = '<base target="_blank">';
 
@@ -45,43 +46,30 @@ export default function EmbeddedHtmlFrame({
   const startHeight = Number(initialHeight);
   const knownHeight =
     Number.isFinite(startHeight) && startHeight > 0 ? Math.round(startHeight) : 0;
-  const fittedOnceRef = useRef(false);
+  const [measuredHeight, setMeasuredHeight] = useState(null);
 
   const fit = useCallback(() => {
-    const frame = frameRef.current;
-    const doc = frame?.contentDocument;
-    if (!frame || !doc?.documentElement) return;
-
-    // Zeroing on the first pass would collapse a snapshot height and dip the grid.
-    if (fittedOnceRef.current || !knownHeight) {
-      frame.style.height = '0px';
-    }
-    const height = Math.max(
-      doc.documentElement.scrollHeight,
-      doc.body?.scrollHeight || 0,
-      doc.documentElement.offsetHeight,
-      doc.body?.offsetHeight || 0,
-      knownHeight || 40,
-    );
-    frame.style.height = `${height}px`;
-    fittedOnceRef.current = true;
+    const height = fitHtmlFrame(frameRef.current);
+    if (height === null) return false;
+    setMeasuredHeight(height);
     onHeightRef.current?.(height);
-  }, [knownHeight]);
+    return true;
+  }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const frame = frameRef.current;
     if (!frame) return undefined;
 
     const attach = () => {
-      fit();
+      if (!fit()) return undefined;
       const doc = frame.contentDocument;
-      if (!doc) return undefined;
 
       const ro = new ResizeObserver(() => fit());
       ro.observe(doc.documentElement);
       if (doc.body) ro.observe(doc.body);
 
       const onAsset = () => fit();
+      window.addEventListener('resize', onAsset);
       doc.querySelectorAll('img').forEach((img) => {
         if (!img.complete) img.addEventListener('load', onAsset);
       });
@@ -97,6 +85,7 @@ export default function EmbeddedHtmlFrame({
 
       return () => {
         ro.disconnect();
+        window.removeEventListener('resize', onAsset);
         doc.removeEventListener('click', onClick, true);
         doc.querySelectorAll('img').forEach((img) => {
           img.removeEventListener('load', onAsset);
@@ -104,12 +93,15 @@ export default function EmbeddedHtmlFrame({
       };
     };
 
-    let detach = attach();
+    let detach;
     const onLoad = () => {
       detach?.();
       detach = attach();
     };
     frame.addEventListener('load', onLoad);
+    // Hydration may happen after srcdoc has already loaded. In that case fit
+    // before React's next paint; otherwise the load handler does the first fit.
+    detach = attach();
     return () => {
       frame.removeEventListener('load', onLoad);
       detach?.();
@@ -123,10 +115,12 @@ export default function EmbeddedHtmlFrame({
       srcDoc={asSrcDoc(html)}
       sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
       scrolling="no"
+      data-info-pending={measuredHeight === null ? '' : undefined}
+      aria-busy={measuredHeight === null}
       className="block w-full border-0 bg-transparent"
       style={{
-        minHeight: knownHeight || 40,
-        height: knownHeight || undefined,
+        minHeight: 40,
+        height: measuredHeight ?? (knownHeight || 40),
         overflow: 'hidden',
       }}
     />

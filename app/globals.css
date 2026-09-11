@@ -26,6 +26,30 @@ body,
   min-height: 100%;
 }
 
+/* Apply to server HTML too: reveal info and cards together only after every
+   HTML panel has been fitted. Hiding just the iframe still lets the cards jump.
+   Visibility preserves layout, so the hidden document can be measured. */
+iframe[data-info-pending] {
+  visibility: hidden;
+}
+
+.info-layout:has(iframe[data-info-pending]) {
+  position: relative;
+}
+
+.info-layout:has(iframe[data-info-pending]) > * {
+  visibility: hidden;
+}
+
+.info-layout:has(iframe[data-info-pending])::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: url('/vv-grey.png') center -240px / 1300px no-repeat;
+  opacity: 0.3;
+  pointer-events: none;
+}
+
 /* ── Modal enter and exit ──
    Keyframes rather than transitions so the animation starts on the element's
    first paint. A transition needs the "from" state painted before the class

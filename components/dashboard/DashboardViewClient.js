@@ -412,7 +412,7 @@ export default function DashboardViewClient({
       </div>
 
       <main
-        className={`w-full flex-1 flex flex-col px-[10px] md:px-8 pb-72 ${
+        className={`info-layout w-full flex-1 flex flex-col px-[10px] md:px-8 pb-72 ${
           (isOwner && isEditMode) || hasVisibleInfo(infoText1)
             ? "pt-[1.8rem]"
             : "pt-[calc(1.8rem*1.53)]"
