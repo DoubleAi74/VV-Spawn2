@@ -36,6 +36,7 @@ import { useInfoSync } from "@/lib/useInfoSync";
 import DashHeader from "@/components/dashboard/DashHeader";
 import PageCard from "@/components/dashboard/PageCard";
 import DashboardInfoEditor from "@/components/dashboard/DashboardInfoEditor";
+import DashboardContent from "@/components/dashboard/DashboardContent";
 import CreatePageModal from "@/components/dashboard/CreatePageModal";
 import EditPageModal from "@/components/dashboard/EditPageModal";
 import EmptyAddButton from "@/components/EmptyAddButton";
@@ -385,10 +386,7 @@ export default function DashboardViewClient({
 
   return (
     <div
-      // min-h-[150vh] forced one and a half screens of empty background even
-      // for a user with two pages, so a new account's first action was
-      // scrolling through nothing. See LNK-5.
-      className="min-h-screen overscroll-none flex flex-col"
+      className="dashboard-shell overscroll-none flex flex-col"
       style={{
         backgroundColor: backHex,
         "--focus-ring": focusRingOn(backHex),
@@ -411,8 +409,9 @@ export default function DashboardViewClient({
         />
       </div>
 
-      <main
-        className={`info-layout w-full flex-1 flex flex-col px-[10px] md:px-8 pb-72 ${
+      <DashboardContent
+        backHex={backHex}
+        className={`w-full flex-1 flex flex-col px-[10px] md:px-8 pb-72 ${
           (isOwner && isEditMode) || hasVisibleInfo(infoText1)
             ? "pt-[1.8rem]"
             : "pt-[calc(1.8rem*1.53)]"
@@ -511,7 +510,7 @@ export default function DashboardViewClient({
             />
           </div>
         ) : null}
-      </main>
+      </DashboardContent>
 
       {isOwner && isEditMode && (
         // <nav

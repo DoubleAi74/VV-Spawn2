@@ -29,7 +29,7 @@ export default function LoadingOwnerChrome({ email, variant = "dashboard" }) {
     // only when the snapshot says so.
     return (
       <div
-        className="flex items-center gap-2 shrink-0 pointer-events-none"
+        className="flex items-center justify-end gap-2 shrink-0 min-w-[118px] sm:min-w-0 translate-y-[1px] sm:translate-y-0 pointer-events-none"
         aria-hidden
       >
         {density}

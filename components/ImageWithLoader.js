@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import { CARD_IMAGE_WIDTH, withImageBucket } from '@/lib/cloudflareLoader';
+import { decodeImage } from '@/lib/decodeImage';
 
 const loadedSrcCache = new Set();
 const MAX_LOADED_SRC_CACHE = 800;
@@ -25,8 +26,15 @@ function rememberLoadedSrc(srcKey) {
   }
 }
 
-export default function ImageWithLoader({
-  src,
+export default function ImageWithLoader({ src, bucket = CARD_IMAGE_WIDTH, ...props }) {
+  // A new source gets fresh decode/error state, including when an editor
+  // switches back to an image that was displayed earlier.
+  const bucketedSrc = withImageBucket(src, bucket);
+  return <DecodedImage key={makeSrcKey(bucketedSrc)} {...props} src={bucketedSrc} />;
+}
+
+function DecodedImage({
+  src: bucketedSrc,
   alt,
   blurDataURL,
   fill = true,
@@ -37,71 +45,68 @@ export default function ImageWithLoader({
   style = {},
   priority = false,
   useNextBlurPlaceholder = false,
-  bucket = CARD_IMAGE_WIDTH,
 }) {
-  // Every consumer of this component renders a grid card, so the card bucket is
-  // the default; the lightbox builds its own URLs and does not come through here.
-  const bucketedSrc = withImageBucket(src, bucket);
   const srcKey = makeSrcKey(bucketedSrc);
-  // Seen-this-tab only skips the fade. The <img> still starts invisible until
-  // this element's decoder actually has pixels (complete + naturalWidth).
+  // Seen-this-tab skips the fade; each new element still needs decoded pixels.
   const [readySrc, setReadySrc] = useState(null);
-  const [animateReveal, setAnimateReveal] = useState(
-    () => Boolean(srcKey) && !loadedSrcCache.has(srcKey),
-  );
-  const [hasError, setHasError] = useState(false);
+  const [animateReveal, setAnimateReveal] = useState(false);
+  const [failedSrc, setFailedSrc] = useState(null);
+  const imageRef = useRef(null);
+  const initiallyCompleteRef = useRef(false);
+  const decodeRef = useRef(null);
   const ready = Boolean(srcKey) && readySrc === srcKey;
+  const hasError = Boolean(srcKey) && failedSrc === srcKey;
 
-  useEffect(() => {
-    setAnimateReveal(Boolean(srcKey) && !loadedSrcCache.has(srcKey));
-    setHasError(false);
-  }, [srcKey]);
-
-  const markReady = useCallback(() => {
-    rememberLoadedSrc(srcKey);
-    setReadySrc(srcKey);
-  }, [srcKey]);
-
-  const bindWrap = useCallback(
-    (el) => {
-      if (!el || !srcKey) return;
-      const check = () => {
-        const img = el.querySelector('img');
-        if (img?.complete && img.naturalWidth > 0) markReady();
-      };
-      check();
-      requestAnimationFrame(check);
+  const prepareImage = useCallback(
+    (img, alreadyLoaded = false) => {
+      if (!img?.complete || img.naturalWidth <= 0 || decodeRef.current?.img === img) return;
+      const task = { img };
+      decodeRef.current = task;
+      decodeImage(img).then((decoded) => {
+        // A decode can finish after a source change or unmount.
+        if (imageRef.current !== img || decodeRef.current !== task) return;
+        if (!decoded) {
+          setFailedSrc(srcKey);
+          return;
+        }
+        setAnimateReveal(!alreadyLoaded && !loadedSrcCache.has(srcKey));
+        rememberLoadedSrc(srcKey);
+        setReadySrc(srcKey);
+      });
     },
-    [srcKey, markReady],
+    [srcKey],
   );
 
-  const handleLoad = useCallback(() => {
-    markReady();
-  }, [markReady]);
+  const bindImage = useCallback((img) => {
+    imageRef.current = img;
+    decodeRef.current = null;
+    initiallyCompleteRef.current = Boolean(img?.complete && img.naturalWidth > 0);
+    // Next Image reassigns src in its own ref after this callback, which can
+    // abort a decode started here. Its onLoad also handles cached images;
+    // wait for that callback before decoding this element.
+  }, []);
+
+  const handleLoad = useCallback((event) => {
+    prepareImage(event.currentTarget, initiallyCompleteRef.current);
+  }, [prepareImage]);
 
   const handleError = useCallback(() => {
-    setHasError(true);
-    setReadySrc(srcKey);
+    setFailedSrc(srcKey);
   }, [srcKey]);
 
   const shouldUseNextBlur = Boolean(useNextBlurPlaceholder && blurDataURL && !ready);
-  // 700ms read as sluggish on a grid where twenty images reveal at once, and
-  // PERF-1 made it worse: the card bucket decodes fast enough that the reveal
-  // is now most of the delay the user perceives, not a fraction of it.
+  // The page is already readable while photos sharpen over their previews.
   const revealClassName = [
     ready ? 'opacity-100' : 'opacity-0',
     animateReveal
-      ? blurDataURL
-        ? 'transition-opacity duration-300 ease-out will-change-[opacity]'
-        : `transition-[opacity,filter] duration-300 ease-out will-change-[opacity,filter] ${
-            ready ? 'blur-0' : 'blur-[10px]'
-          }`
+      ? 'transition-opacity duration-150 ease-out motion-reduce:transition-none'
       : '',
   ]
     .filter(Boolean)
     .join(' ');
 
   const imageProps = {
+    ref: bindImage,
     src: bucketedSrc,
     priority,
     // `priority` alone only makes next/image emit a ReactDOM.preload; the
@@ -117,7 +122,7 @@ export default function ImageWithLoader({
   };
 
   return (
-    <div ref={bindWrap} className="relative w-full h-full">
+    <div className="relative w-full h-full">
       {hasError ? (
         <div className="absolute inset-0 flex items-center justify-center bg-neutral-800/60">
           <div className="w-6 h-6 text-neutral-300/70">

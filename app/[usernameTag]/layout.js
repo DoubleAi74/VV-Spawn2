@@ -1,6 +1,8 @@
 import { notFound } from 'next/navigation';
 import { resolveUsernameTag } from '@/lib/data';
 import { isDocumentRequest } from '@/lib/isDocumentRequest';
+import { toProfileShell } from '@/lib/profileShell';
+import { ProfileShellProvider } from '@/context/ProfileShellContext';
 
 /**
  * Decides what `/{usernameTag}` *is* before anything renders — but only on a
@@ -23,5 +25,11 @@ export default async function UsernameTagLayout({ children, params }) {
   // the segments below it, so redirecting from here would send
   // `/{old-tag}/{old-slug}` to `/{new-tag}` and lose the page. Each route below
   // canonicalises the whole path it can see, in one hop.
-  return children;
+  // Reuse the lookup above for the first paint, without waiting for the pages
+  // or session. Flight navigation still takes the immediate path at the top.
+  return (
+    <ProfileShellProvider value={toProfileShell(user, usernameTag)}>
+      {children}
+    </ProfileShellProvider>
+  );
 }

@@ -15,8 +15,10 @@ import {
   setDashboardSnapshot,
 } from "@/lib/routeTransitionCache";
 import { useDashboardSnapshot } from "@/lib/useRouteSnapshot";
-import { normalizeHex, lighten } from "@/lib/colour";
+import { normalizeHex, lighten, readableInkOn } from "@/lib/colour";
 import { readPersistedTheme } from "@/context/ThemeContext";
+import { useProfileShell } from "@/context/ProfileShellContext";
+import DashboardContent from "@/components/dashboard/DashboardContent";
 import LoadingOwnerChrome from "@/components/LoadingOwnerChrome";
 import PageInfoView, { hasVisibleInfo } from "@/components/page/PageInfoView";
 
@@ -28,6 +30,7 @@ export default function DashboardSkeleton() {
   const usernameTag =
     typeof params?.usernameTag === "string" ? params.usernameTag : "";
   const snapshot = useDashboardSnapshot(usernameTag);
+  const shell = useProfileShell(usernameTag);
   const persisted = readPersistedTheme(usernameTag);
 
   useEffect(() => {
@@ -40,14 +43,15 @@ export default function DashboardSkeleton() {
     Array.isArray(snapshot?.pages) && snapshot.pages.length > 0;
 
   const dashHex = normalizeHex(
-    snapshot?.dashHex || persisted?.dashHex,
+    snapshot?.dashHex || shell?.dashHex || persisted?.dashHex,
     "#3b3b3b",
   );
   const backHex = normalizeHex(
-    snapshot?.backHex || persisted?.backHex,
+    snapshot?.backHex || shell?.backHex || persisted?.backHex,
     "#cccccc",
   );
   const pages = hasSnapshotCards ? snapshot.pages : [];
+  const usernameTitle = snapshot?.usernameTitle || shell?.usernameTitle;
 
   // Mirror DashboardViewClient's grid so the cards do not jump when the
   // flight finishes.
@@ -55,7 +59,7 @@ export default function DashboardSkeleton() {
 
   return (
     <div
-      className="min-h-[150vh] overscroll-none"
+      className="dashboard-shell overscroll-none flex flex-col"
       style={{ backgroundColor: backHex }}
     >
       <header
@@ -67,12 +71,12 @@ export default function DashboardSkeleton() {
       >
         <div className="w-full px-0">
           <div className="flex items-center justify-between gap-2 min-h-[73px] sm:min-h-[85px] px-4 sm:px-8">
-            {snapshot?.usernameTitle ? (
+            {usernameTitle ? (
               <h1
                 className="text-2xl sm:text-4xl font-extrabold tracking-tight truncate"
-                style={{ color: lighten(dashHex, 245, LOADING_FALLBACK_HEX) }}
+                style={{ color: readableInkOn(dashHex) }}
               >
-                {snapshot.usernameTitle}
+                {usernameTitle}
               </h1>
             ) : (
               <div className="h-7 sm:h-10 w-48 sm:w-64 rounded-[3px] bg-white/20 animate-pulse" />
@@ -92,8 +96,10 @@ export default function DashboardSkeleton() {
         </div>
       </header>
 
-      <main
-        className={`info-layout w-full flex flex-col px-[10px] md:px-8 pb-72 ${
+      <DashboardContent
+        backHex={backHex}
+        loading={!hasSnapshotCards}
+        className={`w-full flex flex-col px-[10px] md:px-8 pb-72 ${
           pages.length > 0 && hasVisibleInfo(snapshot?.infoText1)
             ? "pt-[1.8rem]"
             : "pt-[calc(1.8rem*1.53)]"
@@ -132,17 +138,7 @@ export default function DashboardSkeleton() {
               />
             ))}
           </div>
-        ) : (
-          <div className="flex items-center justify-center pt-[0px] mt-[-290px] pr-[30px]">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/vv-grey.png"
-              alt=""
-              className="w-[1300px] h-[1300px] max-w-none opacity-30"
-              // className="w-[690px] h-[690px] opacity-20"
-            />
-          </div>
-        )}
+        ) : null}
         {pages.length > 0 && hasVisibleInfo(snapshot?.infoText) ? (
           <div className="mt-6 shrink-0">
             <PageInfoView
@@ -164,7 +160,7 @@ export default function DashboardSkeleton() {
             />
           </div>
         ) : null}
-      </main>
+      </DashboardContent>
     </div>
   );
 }

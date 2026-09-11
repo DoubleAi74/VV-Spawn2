@@ -162,7 +162,7 @@ export default function DashHeader({
           </div>
 
           <nav
-            className="flex items-center gap-2 shrink-0 translate-y-[1px] sm:translate-y-0"
+            className="flex items-center justify-end gap-2 shrink-0 min-w-[118px] sm:min-w-0 translate-y-[1px] sm:translate-y-0"
             aria-label="Dashboard actions"
           >
             {isOwner ? (
