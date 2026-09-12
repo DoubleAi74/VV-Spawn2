@@ -1,11 +1,30 @@
 import { auth } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
-import { createPost, isParentPageMissingError } from '@/lib/data';
+import { createPost, getPostsByPage, isParentPageMissingError } from '@/lib/data';
 import Page from '@/lib/models/Page';
 import { revalidateDashboardAndPage } from '@/lib/revalidation';
 import { INVALID_POST_URL_MESSAGE, isHttpUrl } from '@/lib/postUrl';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { NextResponse } from 'next/server';
+import { isObjectIdOrHexString } from 'mongoose';
+
+export async function GET(request) {
+  const pageId = new URL(request.url).searchParams.get('pageId');
+  if (!isObjectIdOrHexString(pageId)) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+  await connectDB();
+  const page = await Page.findById(pageId, { userId: 1, isPrivate: 1 }).lean();
+  if (!page) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (page.isPrivate) {
+    const session = await auth();
+    if (String(page.userId) !== session?.user?.userId) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+  }
+  const posts = await getPostsByPage(pageId);
+  return NextResponse.json(posts, { headers: { 'Cache-Control': 'private, no-store' } });
+}
 
 export async function POST(request) {
   const session = await auth();

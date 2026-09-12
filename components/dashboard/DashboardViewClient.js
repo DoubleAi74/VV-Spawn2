@@ -7,20 +7,14 @@ import { Plus } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme, useThemeSync } from "@/context/ThemeContext";
 import { mutationFailureDetail, useToast } from "@/context/ToastContext";
-import { mergeServerAndOptimistic } from "@/lib/optimisticMerge";
 import { normalizeOrderIndexes, swapItemsByIds } from "@/lib/ordering";
 import {
   applyEditFromServer,
   applyEditLocally,
   restoreDeletedItem,
   rollbackItemSnapshot,
-  shouldMergeServerList,
 } from "@/lib/listMutation";
-import {
-  capturePendingScroll,
-  takePendingScroll,
-} from "@/lib/preserveScroll";
-import { useQueue } from "@/lib/useQueue";
+import { useCardList } from "@/lib/useCardList";
 import { focusRingOn } from "@/lib/colour";
 import { useGridColumns } from "@/lib/useGridColumns";
 import {
@@ -50,25 +44,6 @@ export default function DashboardViewClient({
   const { user: sessionUser } = useAuth();
   const { dashHex, backHex } = useTheme();
   const router = useRouter();
-  const listGenerationRef = useRef(0);
-  const refreshGenerationRef = useRef(null);
-  const bumpListGeneration = useCallback(() => {
-    listGenerationRef.current += 1;
-    return listGenerationRef.current;
-  }, []);
-  const refreshWithScrollRestore = useCallback(() => {
-    if (typeof window === "undefined") return;
-    // Offline, the RSC refresh fails and the App Router falls back to a full
-    // browser navigation — which lands on the browser's offline page and takes
-    // the failure message with it. Nothing has changed on the server anyway.
-    if (typeof navigator !== "undefined" && navigator.onLine === false) return;
-    refreshGenerationRef.current = listGenerationRef.current;
-    if ("scrollRestoration" in window.history) {
-      window.history.scrollRestoration = "manual";
-    }
-    capturePendingScroll(listGenerationRef.current);
-    router.refresh();
-  }, [router]);
   const { showError } = useToast();
   // A rolled-back change the user was not told about is indistinguishable
   // from losing their work.
@@ -81,7 +56,6 @@ export default function DashboardViewClient({
     },
     [showError],
   );
-  const { enqueue, isSyncing } = useQueue(undefined, handleQueueError);
 
   // The server already knows — waiting on useSession is what left the header
   // without email/Edit until the client caught up.
@@ -92,6 +66,14 @@ export default function DashboardViewClient({
   const [isEditMode, setIsEditMode] = useState(false);
   const info = useInfoSync({
     initialValues: user.dashboard,
+    initialClientValues: () => {
+      const snapshot = getDashboardSnapshot(user.usernameTag);
+      // A cached route can still carry the columns from before our last edit.
+      // Only seed an owner's own layout; visitor overrides are separate.
+      return isOwner && snapshot?.isOwner && Object.hasOwn(snapshot, 'gridCols')
+        ? { gridCols: snapshot.gridCols }
+        : undefined;
+    },
     fields: DASHBOARD_INFO_FIELDS,
     readUrl: `/api/user/dashboard?userId=${encodeURIComponent(user.id)}`,
     writeUrl: "/api/user/dashboard",
@@ -103,7 +85,21 @@ export default function DashboardViewClient({
   // The theme poll only has anything to report while its own colours can be
   // changed, which is the owner in edit mode and nobody else.
   useThemeSync(isOwner && isEditMode);
-  const [pages, setPages] = useState(initialPages);
+  const {
+    items: pages, setItems: setPages, getItems: getCurrentPages,
+    enqueue, isSyncing, generationRef: listGenerationRef, refresh: refreshList,
+  } = useCardList({
+    resourceKey: `dashboard:${user.id}`,
+    initialItems: initialPages,
+    readUrl: `/api/pages?userId=${encodeURIComponent(user.id)}`,
+    usernameTag: user.usernameTag,
+    isOwner,
+    onError: handleQueueError,
+  });
+  const bumpListGeneration = useCallback(() => {
+    listGenerationRef.current += 1;
+    return listGenerationRef.current;
+  }, [listGenerationRef]);
   const [showCreate, setShowCreate] = useState(false);
   const [editingPage, setEditingPage] = useState(null);
   const prefetchedRoutesRef = useRef(new Set());
@@ -118,22 +114,6 @@ export default function DashboardViewClient({
     ? info.error ? 'Layout not saved' : 'Saving layout...'
     : '';
 
-  useLayoutEffect(() => {
-    if (
-      shouldMergeServerList(
-        refreshGenerationRef.current,
-        listGenerationRef.current,
-      )
-    ) {
-      setPages((currentPages) =>
-        mergeServerAndOptimistic(initialPages, currentPages),
-      );
-    }
-
-    const savedY = takePendingScroll(listGenerationRef.current);
-    if (savedY == null) return;
-    window.scrollTo({ top: savedY, behavior: "instant" });
-  }, [initialPages]);
 
   // ── Create page ──
   const handleCreatePage = useCallback(
@@ -166,7 +146,7 @@ export default function DashboardViewClient({
         },
       });
     },
-    [pages.length, enqueue, bumpListGeneration],
+    [pages.length, enqueue, bumpListGeneration, setPages],
   );
 
   // ── Edit page ──
@@ -272,7 +252,7 @@ export default function DashboardViewClient({
         await res.json().catch(() => ({}));
       },
       onRollback: () => {
-        refreshWithScrollRestore();
+        void refreshList();
       },
     });
   }
@@ -319,7 +299,7 @@ export default function DashboardViewClient({
       infoText,
       infoMode,
       infoHeight: infoHeightRef.current,
-      pages: visiblePages.slice(0, 20).map((page) => ({
+      pages: getCurrentPages().filter((page) => isOwner || !page.isPrivate).slice(0, 20).map((page) => ({
         _id: page._id,
         title: page.title || "",
         description: page.description || "",
@@ -341,7 +321,7 @@ export default function DashboardViewClient({
     infoMode1,
     infoText,
     infoMode,
-    visiblePages,
+    getCurrentPages,
   ]);
 
   // Keep loading widths current before navigation can paint its fallback.

@@ -16,7 +16,7 @@ export default function TitleEdit({
   if (!isEditMode) {
     return (
       <h1
-        className="text-2xl sm:text-4xl font-extrabold tracking-tight drop-shadow pr-2 break-words leading-tight truncate"
+        className="min-w-0 text-[22px] sm:text-4xl font-extrabold tracking-tight drop-shadow sm:pr-2 leading-tight [overflow-wrap:anywhere] [text-wrap:balance] sm:truncate sm:[text-wrap:nowrap]"
         style={{ color: textColor }}
       >
         {currentTitle}
@@ -28,11 +28,11 @@ export default function TitleEdit({
     <button
       type="button"
       onClick={() => onEditingChange(!editing)}
-      className="flex items-center gap-2 group min-w-0"
+      className="flex items-center gap-2 group min-w-0 text-left"
       aria-label={editing ? "Close name editor" : "Edit display name"}
     >
       <h1
-        className="text-2xl sm:text-4xl font-extrabold tracking-tight drop-shadow pr-2 break-words leading-tight truncate"
+        className="min-w-0 text-[22px] sm:text-4xl font-extrabold tracking-tight drop-shadow sm:pr-2 leading-tight [overflow-wrap:anywhere] [text-wrap:balance] sm:truncate sm:[text-wrap:nowrap]"
         style={{ color: textColor }}
       >
         {currentTitle}

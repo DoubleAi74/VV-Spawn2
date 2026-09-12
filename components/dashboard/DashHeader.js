@@ -129,8 +129,8 @@ export default function DashHeader({
       }}
     >
       <div className="w-full px-4 sm:px-8">
-        <div className="flex items-center justify-between gap-2 min-h-[73px] sm:min-h-[85px]">
-          <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+        <div className={`flex items-center justify-between gap-2 min-h-[73px] sm:min-h-[85px] py-2 sm:py-0 ${isOwner && isEditMode ? "flex-wrap sm:flex-nowrap" : ""}`}>
+          <div className={`flex min-w-0 flex-1 items-center gap-2 sm:gap-3 ${isOwner && isEditMode ? "basis-full sm:basis-auto" : ""}`}>
             <TitleEdit
               currentTitle={usernameTitle}
               isEditMode={isEditMode}
@@ -162,7 +162,7 @@ export default function DashHeader({
           </div>
 
           <nav
-            className="flex items-center justify-end gap-2 shrink-0 min-w-[118px] sm:min-w-0 translate-y-[1px] sm:translate-y-0"
+            className="flex items-center justify-end gap-2 shrink-0 ml-auto min-w-[118px] sm:min-w-0 translate-y-[1px] sm:translate-y-0"
             aria-label="Dashboard actions"
           >
             {isOwner ? (
@@ -210,6 +210,7 @@ export default function DashHeader({
                         : "bg-white/10 text-white/80 border-white/20 hover:bg-white/15 hover:text-white"
                     }`}
                   aria-pressed={isEditMode}
+                  aria-label={isEditMode ? "Exit edit mode" : "Edit dashboard"}
                 >
                   <span className="inline-flex items-center gap-1.5">
                     {isEditMode ? <Eye size={14} /> : <Edit2 size={14} />}

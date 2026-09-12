@@ -1,6 +1,7 @@
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { ToastProvider } from "@/context/ToastContext";
+import { DashboardNavigationProvider } from "@/context/DashboardNavigationContext";
 
 export const metadata = {
   title: "Volvox Works",
@@ -36,7 +37,9 @@ export default function RootLayout({ children }) {
     <html lang="en" className="bg-black">
       <body className="bg-black">
         <AuthProvider>
-          <ToastProvider>{children}</ToastProvider>
+          <ToastProvider>
+            <DashboardNavigationProvider>{children}</DashboardNavigationProvider>
+          </ToastProvider>
         </AuthProvider>
       </body>
     </html>

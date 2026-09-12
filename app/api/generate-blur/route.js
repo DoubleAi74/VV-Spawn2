@@ -1,7 +1,7 @@
 /**
  * POST /api/generate-blur
  * Server-side fallback for generating a blur placeholder from an image URL.
- * Uses Cloudflare CDN image transforms to produce a small, blurred JPEG.
+ * Uses Cloudflare CDN image transforms to produce a small JPEG preview.
  * Retries a few times to handle CDN propagation lag after an upload.
  *
  * Requires a session, and the URL must be one of our own R2 objects: this is a
@@ -10,19 +10,12 @@
  */
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
+import { buildBlurPreviewUrl } from '@/lib/blurPreview';
 
 const R2_DOMAIN = process.env.NEXT_PUBLIC_R2_DOMAIN;
 const MAX_RETRIES = 3;
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-function isOwnStorageUrl(imageUrl) {
-  try {
-    return new URL(imageUrl).origin === new URL(R2_DOMAIN).origin;
-  } catch {
-    return false;
-  }
-}
 
 export async function POST(request) {
   const session = await auth();
@@ -42,12 +35,12 @@ export async function POST(request) {
     return NextResponse.json({ error: 'imageUrl is required' }, { status: 400 });
   }
 
-  if (!isOwnStorageUrl(imageUrl)) {
+  let blurUrl;
+  try {
+    blurUrl = buildBlurPreviewUrl(imageUrl, R2_DOMAIN);
+  } catch {
     return NextResponse.json({ error: 'Invalid imageUrl' }, { status: 400 });
   }
-
-  const path = new URL(imageUrl).pathname;
-  const blurUrl = `${R2_DOMAIN}/cdn-cgi/image/width=24,quality=60,blur=2,format=jpeg${path}`;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {

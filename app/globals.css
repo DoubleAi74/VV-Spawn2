@@ -74,16 +74,14 @@ iframe[data-info-pending] {
   opacity: 0.3;
 }
 
-.dashboard-body[data-ready='true']:not(:has(iframe[data-info-pending])) > .dashboard-loading-surface {
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 120ms ease-out;
+.dashboard-body[data-show-watermark='false'] > .dashboard-loading-surface::before {
+  content: none;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .dashboard-body[data-ready='true']:not(:has(iframe[data-info-pending])) > .dashboard-loading-surface {
-    transition: none;
-  }
+.dashboard-body[data-ready='true']:not(:has(iframe[data-info-pending])) > .dashboard-loading-surface {
+  /* Remove the cover and watermark together as soon as the layout is ready. */
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* ── Modal enter and exit ──

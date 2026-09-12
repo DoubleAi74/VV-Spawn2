@@ -8,20 +8,14 @@ import { signOut } from "next-auth/react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme, useThemeSync } from "@/context/ThemeContext";
 import { mutationFailureDetail, useToast } from "@/context/ToastContext";
-import { mergeServerAndOptimistic } from "@/lib/optimisticMerge";
 import { normalizeOrderIndexes, swapItemsByIds } from "@/lib/ordering";
 import {
   applyEditFromServer,
   applyEditLocally,
   restoreDeletedItem,
   rollbackItemSnapshot,
-  shouldMergeServerList,
 } from "@/lib/listMutation";
-import {
-  capturePendingScroll,
-  takePendingScroll,
-} from "@/lib/preserveScroll";
-import { useQueue } from "@/lib/useQueue";
+import { useCardList } from "@/lib/useCardList";
 import {
   getPageSnapshot,
   setPageSnapshot,
@@ -55,25 +49,6 @@ export default function PageViewClient({
   const { user: sessionUser } = useAuth();
   const { dashHex, backHex } = useTheme();
   const router = useRouter();
-  const listGenerationRef = useRef(0);
-  const refreshGenerationRef = useRef(null);
-  const bumpListGeneration = useCallback(() => {
-    listGenerationRef.current += 1;
-    return listGenerationRef.current;
-  }, []);
-  const refreshWithScrollRestore = useCallback(() => {
-    if (typeof window === "undefined") return;
-    // Offline, the RSC refresh fails and the App Router falls back to a full
-    // browser navigation — which lands on the browser's offline page and takes
-    // the failure message with it. Nothing has changed on the server anyway.
-    if (typeof navigator !== "undefined" && navigator.onLine === false) return;
-    refreshGenerationRef.current = listGenerationRef.current;
-    if ("scrollRestoration" in window.history) {
-      window.history.scrollRestoration = "manual";
-    }
-    capturePendingScroll(listGenerationRef.current);
-    router.refresh();
-  }, [router]);
   const { showError } = useToast();
   // A rolled-back change the user was not told about is indistinguishable
   // from losing their work.
@@ -86,7 +61,6 @@ export default function PageViewClient({
     },
     [showError],
   );
-  const { enqueue, isSyncing } = useQueue(undefined, handleQueueError);
 
   const isOwner =
     serverIsOwner || sessionUser?.usernameTag === user.usernameTag;
@@ -94,6 +68,12 @@ export default function PageViewClient({
   // Text, HTML modes and grid density share one read/write coordinator.
   const info = useInfoSync({
     initialValues: page.pageMetaData,
+    initialClientValues: () => {
+      const snapshot = getPageSnapshot(user.usernameTag, page.slug);
+      return isOwner && snapshot?.isOwner && Object.hasOwn(snapshot, 'gridCols')
+        ? { gridCols: snapshot.gridCols }
+        : undefined;
+    },
     fields: PAGE_INFO_FIELDS,
     readUrl: `/api/pages/${page._id}/meta`,
     writeUrl: `/api/pages/${page._id}/meta`,
@@ -113,7 +93,22 @@ export default function PageViewClient({
   // The theme poll only has anything to report while its own colours can be
   // changed, which is the owner in edit mode and nobody else.
   useThemeSync(isOwner && isEditMode);
-  const [posts, setPosts] = useState(initialPosts);
+  const {
+    items: posts, setItems: setPosts, getItems: getCurrentPosts,
+    enqueue, isSyncing, generationRef: listGenerationRef, refresh: refreshList,
+  } = useCardList({
+    resourceKey: `page:${page._id}`,
+    initialItems: initialPosts,
+    readUrl: `/api/posts?pageId=${encodeURIComponent(page._id)}`,
+    usernameTag: user.usernameTag,
+    pageSlug: page.slug,
+    isOwner,
+    onError: handleQueueError,
+  });
+  const bumpListGeneration = useCallback(() => {
+    listGenerationRef.current += 1;
+    return listGenerationRef.current;
+  }, [listGenerationRef]);
   const [showCreate, setShowCreate] = useState(false);
   const [editingPost, setEditingPost] = useState(null);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
@@ -166,22 +161,6 @@ export default function PageViewClient({
     page.pageMetaData?.infoText2,
   ]);
 
-  useLayoutEffect(() => {
-    if (
-      shouldMergeServerList(
-        refreshGenerationRef.current,
-        listGenerationRef.current,
-      )
-    ) {
-      setPosts((currentPosts) =>
-        mergeServerAndOptimistic(initialPosts, currentPosts),
-      );
-    }
-
-    const savedY = takePendingScroll(listGenerationRef.current);
-    if (savedY == null) return;
-    window.scrollTo({ top: savedY, behavior: "instant" });
-  }, [initialPosts]);
 
   const writePageSnapshot = useCallback(() => {
     if (!user?.usernameTag || !page?.slug) return;
@@ -196,7 +175,7 @@ export default function PageViewClient({
       infoText1: above.text || "",
       infoMode1: above.mode,
       infoHeight1: above.height,
-      posts: posts.slice(0, 30).map((post) => ({
+      posts: getCurrentPosts().slice(0, 30).map((post) => ({
         _id: post._id,
         title: post.title || "",
         content_type: post.content_type || "photo",
@@ -213,7 +192,7 @@ export default function PageViewClient({
     page?.title,
     dashHex,
     backHex,
-    posts,
+    getCurrentPosts,
   ]);
 
   // Keep loading widths current before navigation can paint its fallback.
@@ -280,7 +259,7 @@ export default function PageViewClient({
         },
       });
     },
-    [posts.length, enqueue, page._id, bumpListGeneration],
+    [posts.length, enqueue, page._id, bumpListGeneration, setPosts],
   );
 
   // ── Bulk upload ──
@@ -408,7 +387,7 @@ export default function PageViewClient({
         await res.json().catch(() => ({}));
       },
       onRollback: () => {
-        refreshWithScrollRestore();
+        void refreshList();
       },
     });
   }

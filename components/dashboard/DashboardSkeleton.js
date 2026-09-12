@@ -70,10 +70,10 @@ export default function DashboardSkeleton() {
         }}
       >
         <div className="w-full px-0">
-          <div className="flex items-center justify-between gap-2 min-h-[73px] sm:min-h-[85px] px-4 sm:px-8">
+          <div className="flex items-center justify-between gap-2 min-h-[73px] sm:min-h-[85px] px-4 sm:px-8 py-2 sm:py-0">
             {usernameTitle ? (
               <h1
-                className="text-2xl sm:text-4xl font-extrabold tracking-tight truncate"
+                className="min-w-0 flex-1 text-[22px] sm:text-4xl font-extrabold tracking-tight drop-shadow sm:pr-2 leading-tight [overflow-wrap:anywhere] [text-wrap:balance] sm:truncate sm:[text-wrap:nowrap]"
                 style={{ color: readableInkOn(dashHex) }}
               >
                 {usernameTitle}

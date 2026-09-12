@@ -1,9 +1,11 @@
 'use client';
 
 import { useLayoutEffect, useRef, useState } from 'react';
+import { useDashboardReturn } from '@/context/DashboardNavigationContext';
 
 /** One loading surface for the fallback and the live dashboard's first paint. */
 export default function DashboardContent({ backHex, loading = false, className, children }) {
+  const isDashboardReturn = useDashboardReturn();
   const mainRef = useRef(null);
   const [prepared, setPrepared] = useState(false);
   const ready = !loading && prepared;
@@ -50,7 +52,12 @@ export default function DashboardContent({ backHex, loading = false, className, 
   }, [loading]);
 
   return (
-    <div className="dashboard-body" data-ready={ready} style={{ backgroundColor: backHex }}>
+    <div
+      className="dashboard-body"
+      data-ready={ready}
+      data-show-watermark={!isDashboardReturn}
+      style={{ backgroundColor: backHex }}
+    >
       <main
         ref={mainRef}
         className={className}
