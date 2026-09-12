@@ -89,8 +89,9 @@ export default function PageViewLoading() {
         </div>
       </header>
 
+      {/* Clip the upward-offset watermark at the body edge, below the header. */}
       <main
-        className={`w-full flex-1 flex flex-col px-2 sm:px-4 md:px-5 pb-72 ${
+        className={`w-full flex-1 flex flex-col overflow-hidden px-2 sm:px-4 md:px-5 pb-72 ${
           posts.length > 0 && hasVisibleInfo(snapshot?.infoText1)
             ? "pt-[33px]"
             : "pt-[calc(33px*1.5)]"
