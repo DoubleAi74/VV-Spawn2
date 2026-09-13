@@ -38,16 +38,44 @@ iframe[data-info-pending] {
   overflow-anchor: none;
 }
 
-/* Sticky flex item: do not grow/shrink, and stay above the isolated body. */
-.dashboard-sticky-chrome {
-  position: -webkit-sticky;
-  position: sticky;
-  top: 0;
-  z-index: 50;
+/* Mobile: in-flow spacer so the body cannot start at y=0 under a fixed header.
+   73px row + 13px colour strip + notch. Desktop hides the spacer. */
+.dashboard-chrome-spacer {
   flex: 0 0 auto;
   width: 100%;
-  isolation: isolate;
+  min-height: calc(73px + 13px + env(safe-area-inset-top, 0px));
+  pointer-events: none;
+}
+
+@media (min-width: 640px) {
+  .dashboard-chrome-spacer {
+    display: none;
+    min-height: 0;
+  }
+}
+
+/* iOS Chrome: sticky + a wrapping title can leave the header under the URL bar
+   or out of flow. Fixed follows the visual viewport; sticky is enough from sm. */
+.dashboard-chrome {
+  position: fixed;
+  top: var(--dashboard-chrome-top, 0px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  width: auto;
   overflow-anchor: none;
+}
+
+@media (min-width: 640px) {
+  .dashboard-chrome {
+    position: -webkit-sticky;
+    position: sticky;
+    top: 0;
+    left: auto;
+    right: auto;
+    flex: 0 0 auto;
+    width: 100%;
+  }
 }
 
 .dashboard-body {

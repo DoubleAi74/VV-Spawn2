@@ -28,6 +28,7 @@ import { normalizeInfoMode } from "@/lib/infoMode";
 import { DASHBOARD_INFO_FIELDS } from "@/lib/infoFields";
 import { useInfoSync } from "@/lib/useInfoSync";
 import DashHeader from "@/components/dashboard/DashHeader";
+import DashboardChrome from "@/components/dashboard/DashboardChrome";
 import PageCard from "@/components/dashboard/PageCard";
 import DashboardInfoEditor from "@/components/dashboard/DashboardInfoEditor";
 import DashboardContent from "@/components/dashboard/DashboardContent";
@@ -372,10 +373,7 @@ export default function DashboardViewClient({
         "--focus-ring": focusRingOn(backHex),
       }}
     >
-      <div
-        className="dashboard-sticky-chrome"
-        style={{ backgroundColor: backHex }}
-      >
+      <DashboardChrome backHex={backHex}>
         <DashHeader
           usernameTitle={user.usernameTitle}
           usernameTag={user.usernameTag}
@@ -387,7 +385,7 @@ export default function DashboardViewClient({
           onTitleSave={(newTag) => router.replace(`/${newTag}`)}
           grid={grid}
         />
-      </div>
+      </DashboardChrome>
 
       <DashboardContent
         backHex={backHex}

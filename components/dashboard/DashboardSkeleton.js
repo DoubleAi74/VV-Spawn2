@@ -18,6 +18,7 @@ import { normalizeHex, lighten, readableInkOn, focusRingOn } from "@/lib/colour"
 import { readPersistedTheme } from "@/context/ThemeContext";
 import { useProfileShell } from "@/context/ProfileShellContext";
 import DashboardContent from "@/components/dashboard/DashboardContent";
+import DashboardChrome from "@/components/dashboard/DashboardChrome";
 import LoadingOwnerChrome from "@/components/LoadingOwnerChrome";
 import PageInfoView, { hasVisibleInfo } from "@/components/page/PageInfoView";
 
@@ -55,11 +56,7 @@ export default function DashboardSkeleton() {
       className="dashboard-shell overscroll-none flex flex-col"
       style={{ backgroundColor: backHex }}
     >
-      {/* Match the live sticky wrapper and title slot through the handoff. */}
-      <div
-        className="dashboard-sticky-chrome"
-        style={{ backgroundColor: backHex }}
-      >
+      <DashboardChrome backHex={backHex}>
         <div className="relative">
           <header
             className="left-0 right-0 z-40 border-b border-black/10 shadow-sm"
@@ -99,7 +96,7 @@ export default function DashboardSkeleton() {
             </div>
           </header>
         </div>
-      </div>
+      </DashboardChrome>
 
       <DashboardContent
         backHex={backHex}
