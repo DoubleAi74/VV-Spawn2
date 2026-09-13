@@ -76,7 +76,7 @@ export default function PostCard({
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="touch-controls pointer-events-auto absolute top-[10px] left-1/2 -translate-x-1/2 w-[min(100%-0.5rem,10.5rem)] max-w-[calc(100%-0.5rem)] justify-center flex items-center px-3 sm:px-5 py-2.5 rounded-[2px] bg-neutral-950/20 hover:bg-neutral-950/45 text-white/80 hover:text-white text-[15px] font-semibold tracking-wide shadow-sm backdrop-blur-[1px] border border-white/25 hover:border-white/40 opacity-0 group-hover:opacity-55 hover:!opacity-100 focus-visible:opacity-100 transition-[opacity,background-color,border-color,color] duration-150"
+            className="pointer-events-auto absolute top-[10px] left-1/2 -translate-x-1/2 w-[min(100%-0.5rem,10.5rem)] max-w-[calc(100%-0.5rem)] justify-center flex items-center px-3 sm:px-5 py-2.5 rounded-[2px] bg-neutral-950/20 hover:bg-neutral-950/45 text-white/80 hover:text-white text-[15px] font-semibold tracking-wide shadow-sm backdrop-blur-[1px] border border-white/25 hover:border-white/40 opacity-60 sm:opacity-0 sm:group-hover:opacity-55 sm:hover:!opacity-100 focus-visible:opacity-100 transition-[opacity,background-color,border-color,color] duration-150"
             aria-label={`Open: ${post.title || "post"}`}
           >
             Open
