@@ -122,6 +122,7 @@ export default function PageViewLoading() {
                 mode={snapshot.infoMode1}
                 backHex={backMath}
                 initialHeight={snapshot.infoHeight1}
+                slot="1"
                 onHeight={(height) => {
                   const current = getPageSnapshot(usernameTag, pageSlug);
                   if (!current || current.infoHeight1 === height) return;

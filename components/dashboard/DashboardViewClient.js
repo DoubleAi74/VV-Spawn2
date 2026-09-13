@@ -408,6 +408,7 @@ export default function DashboardViewClient({
               hasError={Boolean(info.error)}
               initialHeight={infoHeight1Ref.current}
               onHeight={handleAboveHeight}
+              slot="1"
             />
           </div>
         ) : null}
@@ -483,6 +484,7 @@ export default function DashboardViewClient({
               onChange={(text) => info.change("infoText", text)}
               initialHeight={infoHeightRef.current}
               onHeight={handleBelowHeight}
+              slot="2"
               onModeChange={(mode) => info.change("infoMode", mode)}
               statusLabel={info.statusFor("infoText", "infoMode")}
               hasError={Boolean(info.error)}

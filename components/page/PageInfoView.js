@@ -21,6 +21,7 @@ export default function PageInfoView({
   title = 'Page info',
   initialHeight,
   onHeight,
+  slot,
   className = 'w-full block',
   contentClassName = 'page-content',
 }) {
@@ -36,6 +37,7 @@ export default function PageInfoView({
           title={title}
           initialHeight={initialHeight}
           onHeight={onHeight}
+          slot={slot}
         />
       </section>
     );
