@@ -84,6 +84,22 @@ iframe[data-info-pending] {
   pointer-events: none;
 }
 
+/* Preserve the page watermark's origin without making short pages scroll. */
+.page-loading-watermark {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.page-loading-watermark::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: url('/vv-grey.png') calc(50% - 15px) calc(33px * 1.5 - 305px) / 1300px no-repeat;
+  opacity: 0.3;
+}
+
 /* ── Modal enter and exit ──
    Keyframes rather than transitions so the animation starts on the element's
    first paint. A transition needs the "from" state painted before the class

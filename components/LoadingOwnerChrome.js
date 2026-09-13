@@ -6,7 +6,7 @@ import { Edit2, LogOut, ChevronUp, ChevronDown } from 'lucide-react';
  * The owner controls, painted from the transition snapshot so the header
  * does not pop them in after the session hydrates.
  */
-export default function LoadingOwnerChrome({ email, variant = "dashboard" }) {
+export default function LoadingOwnerChrome({ email, isOwner, variant = "dashboard" }) {
   const isPage = variant === "page";
 
   // Both headers always show the density control; owner chrome adds Edit/Logout.
@@ -29,12 +29,15 @@ export default function LoadingOwnerChrome({ email, variant = "dashboard" }) {
     // only when the snapshot says so.
     return (
       <div
-        className="flex items-center justify-end gap-2 shrink-0 min-w-[118px] sm:min-w-0 translate-y-[1px] sm:translate-y-0 pointer-events-none"
+        className="flex items-center justify-end gap-2 shrink-0 ml-auto min-w-[118px] sm:min-w-0 translate-y-[1px] sm:translate-y-0 pointer-events-none"
         aria-hidden
       >
-        {density}
         {email ? (
           <>
+            <span className="text-white/70 text-xs hidden md:block truncate max-w-[160px]">
+              {email}
+            </span>
+            {density}
             <div className="h-8 w-8 sm:h-9 sm:w-[67px] rounded-[3px] border border-white/20 bg-white/10 text-white/80 inline-flex items-center justify-center">
               <span className="inline-flex items-center gap-1.5">
                 <Edit2 size={14} />
@@ -45,7 +48,15 @@ export default function LoadingOwnerChrome({ email, variant = "dashboard" }) {
               <LogOut size={15} />
             </div>
           </>
-        ) : null}
+        ) : (
+          <>
+            {density}
+            {/* Reserve the visitor slot without showing Login before the role is known. */}
+            <span className={`h-8 px-2.5 sm:h-9 sm:px-3 rounded-[3px] border border-white/20 bg-white/10 text-xs sm:text-sm text-white/85 inline-flex items-center ${isOwner === false ? "" : "invisible"}`}>
+              Login
+            </span>
+          </>
+        )}
       </div>
     );
   }

@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect } from "react";
 import { useParams } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import PostCardSurface from "@/components/page/PostCardSurface";
 import {
   getPageSnapshot,
   setPageSnapshot,
 } from "@/lib/routeTransitionCache";
 import { usePageSnapshot } from "@/lib/useRouteSnapshot";
-import { normalizeHex, lighten, hexToRgba } from "@/lib/colour";
+import { normalizeHex, lighten, hexToRgba, readableInkOn, focusRingOn } from "@/lib/colour";
 import { readPersistedTheme } from "@/context/ThemeContext";
+import { useProfileShell } from "@/context/ProfileShellContext";
 import LoadingOwnerChrome from "@/components/LoadingOwnerChrome";
 import PageInfoView, { hasVisibleInfo } from "@/components/page/PageInfoView";
 import { postGridClassFor } from "@/lib/postGrid";
@@ -24,23 +25,18 @@ export default function PageViewLoading() {
     typeof params?.usernameTag === "string" ? params.usernameTag : "";
   const pageSlug = typeof params?.pageSlug === "string" ? params.pageSlug : "";
   const snapshot = usePageSnapshot(usernameTag, pageSlug);
+  const shell = useProfileShell(usernameTag);
   const persisted = readPersistedTheme(usernameTag);
 
-  useEffect(() => {
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, []);
-
   // Card navigation writes the live theme into the snapshot before the flight.
-  // localStorage is the same colours ThemeProvider already had on the dashboard.
+  // Document loads already have public branding from the profile layout; use
+  // it before hydration as well, without changing viewport scrolling to load.
   const dashHex = normalizeHex(
-    snapshot?.dashHex || persisted?.dashHex,
+    snapshot?.dashHex || shell?.dashHex || persisted?.dashHex,
     "#3b3b3b",
   );
   const backHex = normalizeHex(
-    snapshot?.backHex || persisted?.backHex,
+    snapshot?.backHex || shell?.backHex || persisted?.backHex,
     "#cccccc",
   );
   const posts = snapshot?.posts?.length ? snapshot.posts : [];
@@ -58,15 +54,18 @@ export default function PageViewLoading() {
           paddingTop: "env(safe-area-inset-top, 0px)",
           marginTop: "-4px",
           paddingBottom: "4px",
+          "--focus-ring": focusRingOn(dashHex),
         }}
       >
         <div className="flex items-center justify-between min-h-[52px] sm:min-h-[64px] px-4 sm:px-6">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="h-8 w-8 rounded-[3px] border border-white/20 bg-white/10" />
+            <div className="h-8 w-8 grid place-items-center rounded-[3px] border border-white/20 bg-white/10 text-white/80" aria-hidden="true">
+              <ArrowLeft size={16} />
+            </div>
             {snapshot?.pageTitle ? (
               <h1
                 className="text-xl sm:text-2xl font-bold tracking-wide truncate"
-                style={{ color: lighten(dashHex, 245, LOADING_FALLBACK_HEX) }}
+                style={{ color: readableInkOn(dashHex) }}
               >
                 {snapshot.pageTitle}
               </h1>
@@ -91,7 +90,7 @@ export default function PageViewLoading() {
 
       {/* Clip the upward-offset watermark at the body edge, below the header. */}
       <main
-        className={`w-full flex-1 flex flex-col overflow-hidden px-2 sm:px-4 md:px-5 pb-72 ${
+        className={`relative w-full flex-1 flex flex-col overflow-hidden px-2 sm:px-4 md:px-5 pb-72 ${
           posts.length > 0 && hasVisibleInfo(snapshot?.infoText1)
             ? "pt-[33px]"
             : "pt-[calc(33px*1.5)]"
@@ -129,14 +128,7 @@ export default function PageViewLoading() {
               ))}
             </div>
           ) : (
-            <div className="flex items-center justify-center pt-[0px] mt-[-305px] pr-[30px]">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/vv-grey.png"
-                alt=""
-                className="w-[1300px] h-[1300px] max-w-none opacity-30"
-              />
-            </div>
+            <div className="page-loading-watermark" aria-hidden="true" />
           )}
         </div>
       </main>

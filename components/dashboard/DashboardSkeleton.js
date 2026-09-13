@@ -6,7 +6,6 @@
  * and flash this skeleton when opening a page.
  */
 
-import { useEffect } from "react";
 import { useParams } from "next/navigation";
 import PageCardSurface from "@/components/dashboard/PageCardSurface";
 import { postGridClassFor } from "@/lib/postGrid";
@@ -15,7 +14,7 @@ import {
   setDashboardSnapshot,
 } from "@/lib/routeTransitionCache";
 import { useDashboardSnapshot } from "@/lib/useRouteSnapshot";
-import { normalizeHex, lighten, readableInkOn } from "@/lib/colour";
+import { normalizeHex, lighten, readableInkOn, focusRingOn } from "@/lib/colour";
 import { readPersistedTheme } from "@/context/ThemeContext";
 import { useProfileShell } from "@/context/ProfileShellContext";
 import DashboardContent from "@/components/dashboard/DashboardContent";
@@ -33,12 +32,6 @@ export default function DashboardSkeleton() {
   const shell = useProfileShell(usernameTag);
   const persisted = readPersistedTheme(usernameTag);
 
-  useEffect(() => {
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, []);
   const hasSnapshotCards =
     Array.isArray(snapshot?.pages) && snapshot.pages.length > 0;
 
@@ -62,39 +55,51 @@ export default function DashboardSkeleton() {
       className="dashboard-shell overscroll-none flex flex-col"
       style={{ backgroundColor: backHex }}
     >
-      <header
-        className="sticky top-0 left-0 right-0 z-40 border-b border-black/10 backdrop-blur-md shadow-sm"
-        style={{
-          backgroundColor: dashHex,
-          paddingTop: "env(safe-area-inset-top, 0px)",
-        }}
+      {/* Match the live sticky wrapper and title slot through the handoff. */}
+      <div
+        className="sticky top-0 left-0 right-0 z-50"
+        style={{ backgroundColor: backHex }}
       >
-        <div className="w-full px-0">
-          <div className="flex items-center justify-between gap-2 min-h-[73px] sm:min-h-[85px] px-4 sm:px-8 py-2 sm:py-0">
-            {usernameTitle ? (
-              <h1
-                className="min-w-0 flex-1 text-[22px] sm:text-4xl font-extrabold tracking-tight drop-shadow sm:pr-2 leading-tight [overflow-wrap:anywhere] [text-wrap:balance] sm:truncate sm:[text-wrap:nowrap]"
-                style={{ color: readableInkOn(dashHex) }}
-              >
-                {usernameTitle}
-              </h1>
-            ) : (
-              <div className="h-7 sm:h-10 w-48 sm:w-64 rounded-[3px] bg-white/20 animate-pulse" />
-            )}
-            <LoadingOwnerChrome
-              email={
-                snapshot?.isOwner === false ? "" : snapshot?.email || ""
-              }
-            />
-          </div>
+        <div className="relative">
+          <header
+            className="left-0 right-0 z-40 border-b border-black/10 backdrop-blur-md shadow-sm"
+            style={{
+              backgroundColor: dashHex,
+              paddingTop: "env(safe-area-inset-top, 0px)",
+              "--focus-ring": focusRingOn(dashHex),
+            }}
+          >
+            <div className="w-full px-4 sm:px-8">
+              <div className="flex items-center justify-between gap-2 min-h-[73px] sm:min-h-[85px] py-2 sm:py-0">
+                <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+                  {usernameTitle ? (
+                    <h1
+                      className="min-w-0 text-[22px] sm:text-4xl font-extrabold tracking-tight drop-shadow sm:pr-2 leading-tight [overflow-wrap:anywhere] [text-wrap:balance] sm:truncate sm:[text-wrap:nowrap]"
+                      style={{ color: readableInkOn(dashHex) }}
+                    >
+                      {usernameTitle}
+                    </h1>
+                  ) : (
+                    <div className="h-7 sm:h-10 w-48 sm:w-64 rounded-[3px] bg-white/20 animate-pulse" />
+                  )}
+                </div>
+                <LoadingOwnerChrome
+                  isOwner={snapshot?.isOwner}
+                  email={
+                    snapshot?.isOwner === false ? "" : snapshot?.email || ""
+                  }
+                />
+              </div>
+            </div>
+            <div className="w-full pb-[5px]" style={{ backgroundColor: dashHex }}>
+              <div
+                className="h-[8px] w-full border-t border-black/15"
+                style={{ backgroundColor: lighten(dashHex, 30, LOADING_FALLBACK_HEX) }}
+              />
+            </div>
+          </header>
         </div>
-        <div className="w-full pb-[5px]" style={{ backgroundColor: dashHex }}>
-          <div
-            className="h-[8px] w-full border-t border-black/15"
-            style={{ backgroundColor: lighten(dashHex, 30, LOADING_FALLBACK_HEX) }}
-          />
-        </div>
-      </header>
+      </div>
 
       <DashboardContent
         backHex={backHex}
