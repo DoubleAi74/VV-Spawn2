@@ -177,7 +177,9 @@ export function ThemeProvider({ children, initialDashHex, initialBackHex, storag
 
     window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    syncFromServer();
+    // Do not fetch on the way *into* edit mode. That GET can still hold the
+    // previous colour (the PATCH has not landed, or the public max-age cache
+    // has not expired) and would paint it over a pick the user just made.
 
     return () => {
       isCancelled = true;

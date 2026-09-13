@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { LogOut, Edit2, Eye } from "lucide-react";
 import { signOut } from "next-auth/react";
@@ -25,21 +25,51 @@ const COLOUR_COMMIT_DELAY = 800;
  * Keep the element mounted while the owner is on the dashboard. Unmounting it
  * to leave edit mode makes Chrome/iOS fire `change` with the value from when
  * the picker opened — the previous colour — which then gets shown and saved.
+ * Showing a `display:none` colour input is just as bad: the control keeps both
+ * the last committed value and the last drag, and fires them on the way back
+ * in, which is why toggling edit could restore colour 1, then colour 2.
+ * Events are ignored until a real pointer/focus on this control.
  */
 function ColourInput({ value, onInput, onCommit, className, label, active = true }) {
   const ref = useRef(null);
   const activeRef = useRef(active);
+  const armedRef = useRef(false);
   activeRef.current = active;
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || el.value === value) return;
+    el.value = value;
+  }, [value]);
+
+  useLayoutEffect(() => {
+    armedRef.current = false;
+    const el = ref.current;
+    if (el && el.value !== value) el.value = value;
+    // Only when edit mode toggles. A value change is a drag; disarming
+    // then would drop the rest of the stroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return undefined;
+    const isLive = () => activeRef.current && armedRef.current;
     const handleCommit = () => {
-      if (!activeRef.current) return;
+      if (!isLive()) return;
       onCommit();
     };
+    const arm = () => {
+      if (activeRef.current) armedRef.current = true;
+    };
     el.addEventListener("change", handleCommit);
-    return () => el.removeEventListener("change", handleCommit);
+    el.addEventListener("pointerdown", arm);
+    el.addEventListener("focus", arm);
+    return () => {
+      el.removeEventListener("change", handleCommit);
+      el.removeEventListener("pointerdown", arm);
+      el.removeEventListener("focus", arm);
+    };
   }, [onCommit]);
 
   return (
@@ -49,7 +79,7 @@ function ColourInput({ value, onInput, onCommit, className, label, active = true
       className={className}
       value={value}
       onChange={(e) => {
-        if (!activeRef.current) return;
+        if (!activeRef.current || !armedRef.current) return;
         onInput(e.target.value);
       }}
       tabIndex={active ? 0 : -1}
@@ -81,8 +111,11 @@ export default function DashHeader({
   dashRef.current = dashHex;
   backRef.current = backHex;
 
+  const lastSentRef = useRef(`${dashHex}|${backHex}`);
   const persist = useCallback(
     async ({ dashHex: nextDash, backHex: nextBack }) => {
+      const sentKey = `${nextDash}|${nextBack}`;
+      if (lastSentRef.current === sentKey) return;
       try {
         const res = await fetch("/api/user/colours", {
           method: "PATCH",
@@ -92,6 +125,7 @@ export default function DashHeader({
         // This was a bare `await fetch(...)` with no status check and no error
         // path — the last mutation in the app that could fail in silence.
         if (!res.ok) throw new Error(`Colour save failed: ${res.status}`);
+        lastSentRef.current = sentKey;
       } catch {
         showError(
           "Couldn't save your colours",
