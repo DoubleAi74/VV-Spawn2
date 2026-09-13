@@ -3,7 +3,6 @@ import { notFound, permanentRedirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { getPagesByUser, resolveUsernameTag, toPublicUser } from '@/lib/data';
 import { isDocumentRequest } from '@/lib/isDocumentRequest';
-import { SKIPS_SKELETON_ON_DOCUMENT } from '@/lib/loadingStrategy';
 import { buildMetadata, buildViewport, ogImages, toPlainDescription } from '@/lib/metadata';
 import { ThemeProvider } from '@/context/ThemeContext';
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton';
@@ -82,7 +81,7 @@ export default async function DashboardPage({ params }) {
   // arrives covered (data-ready="false") and unsized (40px info frames) and
   // repaints over a fallback that was already correct. Block here instead —
   // one flush, one paint.
-  if (SKIPS_SKELETON_ON_DOCUMENT && (await isDocumentRequest())) {
+  if (await isDocumentRequest()) {
     return <DashboardBody usernameTag={usernameTag} />;
   }
 

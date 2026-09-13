@@ -22,7 +22,6 @@ export default function DashboardInfoEditor({
   hasError,
   initialHeight,
   onHeight,
-  slot,
 }) {
   const { backHex } = useTheme();
   const palette = useMemo(() => getInfoPalette(backHex), [backHex]);
@@ -52,7 +51,6 @@ export default function DashboardInfoEditor({
         title="Dashboard info"
         initialHeight={initialHeight}
         onHeight={onHeight}
-        slot={slot}
         className="w-full block"
         contentClassName="dashboard-content"
       />

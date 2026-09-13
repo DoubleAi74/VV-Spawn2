@@ -124,7 +124,6 @@ export default function DashboardSkeleton() {
               backHex={backMath}
               title="Dashboard info"
               initialHeight={snapshot.infoHeight1}
-              slot="1"
               className="w-full block"
               contentClassName="dashboard-content"
               onHeight={(height) => {
@@ -159,7 +158,6 @@ export default function DashboardSkeleton() {
               backHex={backMath}
               title="Dashboard info"
               initialHeight={snapshot.infoHeight}
-              slot="2"
               className="w-full block"
               contentClassName="dashboard-content"
               onHeight={(height) => {

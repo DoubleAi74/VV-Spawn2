@@ -41,7 +41,6 @@ export default function EmbeddedHtmlFrame({
   title = 'Dashboard info',
   initialHeight,
   onHeight,
-  slot,
 }) {
   const frameRef = useRef(null);
   const onHeightRef = useRef(onHeight);
@@ -136,7 +135,6 @@ export default function EmbeddedHtmlFrame({
       sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
       scrolling="no"
       data-info-pending={measuredHeight === null ? '' : undefined}
-      data-info-slot={slot}
       aria-busy={measuredHeight === null}
       className="block w-full border-0 bg-transparent"
       style={{

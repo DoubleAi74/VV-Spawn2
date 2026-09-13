@@ -22,7 +22,6 @@ function HtmlInfoEditor({
   backHex,
   initialHeight,
   onHeight,
-  slot,
 }) {
   const structuralStyles =
     "col-start-1 row-start-1 w-full px-3 py-[7px] pr-36 text-base leading-relaxed font-sans rounded-[3px] break-words outline-none resize-none overflow-hidden";
@@ -40,7 +39,6 @@ function HtmlInfoEditor({
         backHex={backHex}
         initialHeight={initialHeight}
         onHeight={onHeight}
-        slot={slot}
       />
     );
   }
@@ -150,7 +148,6 @@ export default function PageInfoEditor({
         backHex={backHex}
         initialHeight={initialHeight1}
         onHeight={onAboveHeight}
-        slot="1"
       />
     );
 

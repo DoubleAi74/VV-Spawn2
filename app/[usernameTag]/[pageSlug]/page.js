@@ -11,7 +11,6 @@ import { buildMetadata, buildViewport, ogImages, toPlainDescription } from '@/li
 import { normalizeInfoMode } from '@/lib/infoMode';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { isDocumentRequest } from '@/lib/isDocumentRequest';
-import { SKIPS_SKELETON_ON_DOCUMENT } from '@/lib/loadingStrategy';
 import PageViewClient from '@/components/page/PageViewClient';
 import PageViewLoading from '@/components/page/PageViewLoading';
 
@@ -118,7 +117,7 @@ export default async function PageViewPage({ params }) {
   // fallback into, so the boundary only buys a second render that arrives with
   // unsized info frames and repaints over content that was already right.
   // This was `loading.js`; as an explicit boundary it can be skipped per request.
-  if (SKIPS_SKELETON_ON_DOCUMENT && (await isDocumentRequest())) {
+  if (await isDocumentRequest()) {
     return <PageViewBody usernameTag={usernameTag} pageSlug={pageSlug} />;
   }
 

@@ -145,30 +145,6 @@ iframe[data-info-pending] {
   visibility: hidden;
 }
 
-/* ── Warm route (DOCUMENT_LOADING === 'skeleton') ──
-   The pre-paint script in app/[usernameTag]/layout.js sets these when this tab
-   already has a snapshot for the route, which is exactly when the skeleton has
-   painted a complete picture. The live view then streams in covered and unsized
-   and would take it away again. Keep what is on screen instead: hold the cover
-   off, and give the server's 40px frames the height we measured last time. */
-:root[data-warm-route] .dashboard-loading-surface {
-  opacity: 0;
-  pointer-events: none;
-}
-
-:root[data-warm-route] .page-body:has(iframe[data-info-pending]) > * {
-  visibility: visible;
-}
-
-/* Beats the inline height React renders; the real fit replaces it on load. */
-:root[data-warm-route] iframe[data-info-pending][data-info-slot='1'] {
-  height: var(--warm-info-1, 40px) !important;
-}
-
-:root[data-warm-route] iframe[data-info-pending][data-info-slot='2'] {
-  height: var(--warm-info-2, 40px) !important;
-}
-
 /* Preserve the page watermark's origin without making short pages scroll. */
 .page-loading-watermark {
   position: absolute;
