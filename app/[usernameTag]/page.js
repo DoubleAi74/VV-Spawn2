@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { getPagesByUser, resolveUsernameTag, toPublicUser } from '@/lib/data';
+import { isDocumentRequest } from '@/lib/isDocumentRequest';
 import { buildMetadata, buildViewport, ogImages, toPlainDescription } from '@/lib/metadata';
 import { ThemeProvider } from '@/context/ThemeContext';
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton';
@@ -74,6 +75,15 @@ async function DashboardBody({ usernameTag }) {
 
 export default async function DashboardPage({ params }) {
   const { usernameTag } = await params;
+
+  // A document request has no client to paint the skeleton into, so the
+  // boundary only buys a second render of the same dashboard: the live view
+  // arrives covered (data-ready="false") and unsized (40px info frames) and
+  // repaints over a fallback that was already correct. Block here instead —
+  // one flush, one paint.
+  if (await isDocumentRequest()) {
+    return <DashboardBody usernameTag={usernameTag} />;
+  }
 
   // Return the boundary immediately so a back-navigation can paint the
   // snapshot skeleton without a parent `loading.js` (that file also wraps
