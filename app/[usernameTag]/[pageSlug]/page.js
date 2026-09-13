@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import {
@@ -9,7 +10,9 @@ import {
 import { buildMetadata, buildViewport, ogImages, toPlainDescription } from '@/lib/metadata';
 import { normalizeInfoMode } from '@/lib/infoMode';
 import { ThemeProvider } from '@/context/ThemeContext';
+import { isDocumentRequest } from '@/lib/isDocumentRequest';
 import PageViewClient from '@/components/page/PageViewClient';
+import PageViewLoading from '@/components/page/PageViewLoading';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,9 +47,7 @@ export async function generateViewport({ params }) {
   return buildViewport({ themeColor: user?.dashboard?.dashHex });
 }
 
-export default async function PageViewPage({ params }) {
-  const { usernameTag, pageSlug } = await params;
-
+async function PageViewBody({ usernameTag, pageSlug }) {
   const [session, resolvedUser] = await Promise.all([
     auth(),
     resolveUsernameTag(usernameTag),
@@ -106,5 +107,23 @@ export default async function PageViewPage({ params }) {
         isOwner={isOwner}
       />
     </ThemeProvider>
+  );
+}
+
+export default async function PageViewPage({ params }) {
+  const { usernameTag, pageSlug } = await params;
+
+  // Same split as the dashboard: a document request has no client to paint the
+  // fallback into, so the boundary only buys a second render that arrives with
+  // unsized info frames and repaints over content that was already right.
+  // This was `loading.js`; as an explicit boundary it can be skipped per request.
+  if (await isDocumentRequest()) {
+    return <PageViewBody usernameTag={usernameTag} pageSlug={pageSlug} />;
+  }
+
+  return (
+    <Suspense fallback={<PageViewLoading />}>
+      <PageViewBody usernameTag={usernameTag} pageSlug={pageSlug} />
+    </Suspense>
   );
 }

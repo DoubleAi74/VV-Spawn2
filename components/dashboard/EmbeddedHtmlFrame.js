@@ -4,6 +4,8 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { fitHtmlFrame, INFO_FRAME_MIN_HEIGHT } from '@/lib/fitHtmlFrame';
 
 const BLANK_BASE = '<base target="_blank">';
+// Long enough for a slow srcdoc parse, short enough not to strand the reveal.
+const PENDING_TIMEOUT_MS = 3000;
 
 function asSrcDoc(html) {
   const source = String(html || '');
@@ -111,7 +113,15 @@ export default function EmbeddedHtmlFrame({
     // dashboard's loading cover over content that is otherwise ready. The real
     // measurement still corrects it once the load handler fires.
     if (!detach && knownHeightRef.current) setMeasuredHeight(knownHeightRef.current);
+    // The pending flag holds a cover up on the dashboard and the whole body
+    // back on a page. A frame whose srcdoc never loads must not hide either of
+    // them for good; give up waiting and show what we have.
+    const giveUp = setTimeout(() => {
+      setMeasuredHeight(current =>
+        current ?? (knownHeightRef.current || INFO_FRAME_MIN_HEIGHT));
+    }, PENDING_TIMEOUT_MS);
     return () => {
+      clearTimeout(giveUp);
       frame.removeEventListener('load', onLoad);
       detach?.();
     };

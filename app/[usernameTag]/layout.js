@@ -30,6 +30,9 @@ export default async function UsernameTagLayout({ children, params }) {
   const shell = toProfileShell(user, usernameTag);
   return (
     <ProfileShellProvider value={shell}>
+      {/* The loading watermark is the first thing either route paints. Fetched
+          from CSS it starts only once the cover does, and streams in visibly. */}
+      <link rel="preload" as="image" href="/vv-grey.webp" />
       <style
         dangerouslySetInnerHTML={{
           __html: `:root{--dash-hex:${shell.dashHex};--back-hex:${shell.backHex}}`,

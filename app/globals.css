@@ -118,7 +118,7 @@ iframe[data-info-pending] {
   position: absolute;
   inset: 0;
   /* Identical origin below the header, independent of either main's padding. */
-  background: url('/vv-grey.png') calc(50% - 15px) -246px / 1300px no-repeat;
+  background: url('/vv-grey.webp') calc(50% - 15px) -246px / 1300px no-repeat;
   opacity: 0.3;
 }
 
@@ -138,6 +138,13 @@ iframe[data-info-pending] {
   }
 }
 
+/* An info frame only learns its height once its srcdoc parses. The page route
+   has no opaque cover, so a frame that starts at the 40px floor and then grows
+   shoves the cards down. Hold the body back and reveal it in one step. */
+.page-body:has(iframe[data-info-pending]) > * {
+  visibility: hidden;
+}
+
 /* Preserve the page watermark's origin without making short pages scroll. */
 .page-loading-watermark {
   position: absolute;
@@ -150,7 +157,7 @@ iframe[data-info-pending] {
   content: '';
   position: absolute;
   inset: 0;
-  background: url('/vv-grey.png') calc(50% - 15px) calc(33px * 1.5 - 305px) / 1300px no-repeat;
+  background: url('/vv-grey.webp') calc(50% - 15px) calc(33px * 1.5 - 305px) / 1300px no-repeat;
   opacity: 0.3;
 }
 

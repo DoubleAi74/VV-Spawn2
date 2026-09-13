@@ -515,7 +515,7 @@ export default function PageViewClient({
       </header>
 
       <main
-        className={`w-full flex-1 flex flex-col px-2 sm:px-4 md:px-5 ${
+        className={`page-body w-full flex-1 flex flex-col px-2 sm:px-4 md:px-5 ${
           (isOwner && isEditMode) || hasAboveInfo
             ? "pt-[33px]"
             : "pt-[calc(33px*1.5)]"
