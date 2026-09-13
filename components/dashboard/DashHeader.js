@@ -21,14 +21,23 @@ const COLOUR_COMMIT_DELAY = 800;
  * A native colour input fires `input` continuously while the picker is dragged
  * and `change` once when it is committed. React's onChange is the former, so
  * the commit is subscribed to directly.
+ *
+ * Keep the element mounted while the owner is on the dashboard. Unmounting it
+ * to leave edit mode makes Chrome/iOS fire `change` with the value from when
+ * the picker opened — the previous colour — which then gets shown and saved.
  */
-function ColourInput({ value, onInput, onCommit, className, label }) {
+function ColourInput({ value, onInput, onCommit, className, label, active = true }) {
   const ref = useRef(null);
+  const activeRef = useRef(active);
+  activeRef.current = active;
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return undefined;
-    const handleCommit = () => onCommit();
+    const handleCommit = () => {
+      if (!activeRef.current) return;
+      onCommit();
+    };
     el.addEventListener("change", handleCommit);
     return () => el.removeEventListener("change", handleCommit);
   }, [onCommit]);
@@ -39,7 +48,12 @@ function ColourInput({ value, onInput, onCommit, className, label }) {
       type="color"
       className={className}
       value={value}
-      onChange={(e) => onInput(e.target.value)}
+      onChange={(e) => {
+        if (!activeRef.current) return;
+        onInput(e.target.value);
+      }}
+      tabIndex={active ? 0 : -1}
+      aria-hidden={!active}
       aria-label={label}
     />
   );
@@ -60,7 +74,12 @@ export default function DashHeader({
   const { showError } = useToast();
   const persistTimerRef = useRef(null);
   const pendingColoursRef = useRef(null);
+  const dashRef = useRef(dashHex);
+  const backRef = useRef(backHex);
+  const wasEditingRef = useRef(isEditMode);
   const [titleEditing, setTitleEditing] = useState(false);
+  dashRef.current = dashHex;
+  backRef.current = backHex;
 
   const persist = useCallback(
     async ({ dashHex: nextDash, backHex: nextBack }) => {
@@ -97,6 +116,11 @@ export default function DashHeader({
   // A pending change must not be lost by navigating away mid-drag.
   useEffect(() => () => flushColours(), [flushColours]);
 
+  useEffect(() => {
+    if (wasEditingRef.current && !isEditMode) flushColours();
+    wasEditingRef.current = isEditMode;
+  }, [isEditMode, flushColours]);
+
   const queuePersist = useCallback(
     (nextDash, nextBack) => {
       pendingColoursRef.current = { dashHex: nextDash, backHex: nextBack };
@@ -107,13 +131,15 @@ export default function DashHeader({
   );
 
   function handleDashChange(next) {
+    dashRef.current = next;
     setDashHex(next);
-    queuePersist(next, backHex);
+    queuePersist(next, backRef.current);
   }
 
   function handleBackChange(next) {
+    backRef.current = next;
     setBackHex(next);
-    queuePersist(dashHex, next);
+    queuePersist(dashRef.current, next);
   }
 
   return (
@@ -141,13 +167,16 @@ export default function DashHeader({
               textColor={readableInkOn(dashHex)}
             />
 
-            {isOwner && isEditMode && (
-              <div className="hidden sm:flex shrink-0 pt-[10px] pb-[6px] px-1 sm:px-3 gap-2">
+            {isOwner && (
+              <div
+                className={`${isEditMode ? "hidden sm:flex" : "hidden"} shrink-0 pt-[10px] pb-[6px] px-1 sm:px-3 gap-2`}
+              >
                 <ColourInput
                   className="h-8 w-9 cursor-pointer rounded-[3px] border border-white/50 bg-white/10 px-[2px] shadow"
                   value={backHex}
                   onInput={handleBackChange}
                   onCommit={flushColours}
+                  active={isEditMode}
                   label="Background colour"
                 />
                 <ColourInput
@@ -155,6 +184,7 @@ export default function DashHeader({
                   value={dashHex}
                   onInput={handleDashChange}
                   onCommit={flushColours}
+                  active={isEditMode}
                   label="Header colour"
                 />
               </div>
@@ -175,24 +205,24 @@ export default function DashHeader({
                 <span className="text-white/70 text-xs hidden md:block truncate max-w-[160px]">
                   {email}
                 </span>
-                {isEditMode && (
-                  <div className="flex sm:hidden gap-2">
-                    <ColourInput
-                      className="h-8 w-8 cursor-pointer rounded-[3px] border border-white/50 bg-white/10 px-[2px] shadow"
-                      value={backHex}
-                      onInput={handleBackChange}
-                      onCommit={flushColours}
-                      label="Background colour"
-                    />
-                    <ColourInput
-                      className="h-8 w-8 cursor-pointer rounded-[3px] border border-white/50 bg-white/10 px-[2px] shadow"
-                      value={dashHex}
-                      onInput={handleDashChange}
-                      onCommit={flushColours}
-                      label="Header colour"
-                    />
-                  </div>
-                )}
+                <div className={`${isEditMode ? "flex sm:hidden" : "hidden"} gap-2`}>
+                  <ColourInput
+                    className="h-8 w-8 cursor-pointer rounded-[3px] border border-white/50 bg-white/10 px-[2px] shadow"
+                    value={backHex}
+                    onInput={handleBackChange}
+                    onCommit={flushColours}
+                    active={isEditMode}
+                    label="Background colour"
+                  />
+                  <ColourInput
+                    className="h-8 w-8 cursor-pointer rounded-[3px] border border-white/50 bg-white/10 px-[2px] shadow"
+                    value={dashHex}
+                    onInput={handleDashChange}
+                    onCommit={flushColours}
+                    active={isEditMode}
+                    label="Header colour"
+                  />
+                </div>
                 <PostColsStepper
                   noun="Pages"
                   postCols={grid.postCols}

@@ -27,8 +27,14 @@ export default async function UsernameTagLayout({ children, params }) {
   // canonicalises the whole path it can see, in one hop.
   // Reuse the lookup above for the first paint, without waiting for the pages
   // or session. Flight navigation still takes the immediate path at the top.
+  const shell = toProfileShell(user, usernameTag);
   return (
-    <ProfileShellProvider value={toProfileShell(user, usernameTag)}>
+    <ProfileShellProvider value={shell}>
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `:root{--dash-hex:${shell.dashHex};--back-hex:${shell.backHex}}`,
+        }}
+      />
       {children}
     </ProfileShellProvider>
   );

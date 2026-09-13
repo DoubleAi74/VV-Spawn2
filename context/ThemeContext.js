@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { normalizeHex } from '@/lib/colour';
 
 const ThemeContext = createContext(null);
@@ -21,6 +21,15 @@ export function readPersistedTheme(storageKey) {
   } catch {
     return null;
   }
+}
+
+/** Keep :root in sync so the next route's loading header can use these fills. */
+export function writeThemeVars(dashHex, backHex) {
+  if (typeof document === 'undefined') return;
+  const dash = normalizeHex(dashHex, '');
+  const back = normalizeHex(backHex, '');
+  if (dash) document.documentElement.style.setProperty('--dash-hex', dash);
+  if (back) document.documentElement.style.setProperty('--back-hex', back);
 }
 
 export function ThemeProvider({ children, initialDashHex, initialBackHex, storageKey }) {
@@ -69,9 +78,21 @@ export function ThemeProvider({ children, initialDashHex, initialBackHex, storag
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [persistedKey]);
 
+  const skipNextInitialRef = useRef(true);
   useEffect(() => {
+    // First run would overwrite the localStorage apply above with whatever the
+    // RSC payload still has — often the colour from before the last save.
+    if (skipNextInitialRef.current) {
+      skipNextInitialRef.current = false;
+      return;
+    }
+    if (Date.now() < localHoldUntilRef.current) return;
     applyTheme(initialDashHex, initialBackHex);
   }, [initialDashHex, initialBackHex, applyTheme]);
+
+  useLayoutEffect(() => {
+    writeThemeVars(dashHex, backHex);
+  }, [dashHex, backHex]);
 
   useEffect(() => {
     if (!persistedKey) return;

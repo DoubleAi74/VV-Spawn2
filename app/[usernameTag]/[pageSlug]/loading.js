@@ -8,7 +8,16 @@ import {
   setPageSnapshot,
 } from "@/lib/routeTransitionCache";
 import { usePageSnapshot } from "@/lib/useRouteSnapshot";
-import { normalizeHex, lighten, hexToRgba, readableInkOn, focusRingOn } from "@/lib/colour";
+import {
+  normalizeHex,
+  lighten,
+  hexToRgba,
+  readableInkOn,
+  focusRingOn,
+  cssThemeFill,
+  THEME_DASH_CSS,
+  THEME_BACK_CSS,
+} from "@/lib/colour";
 import { readPersistedTheme } from "@/context/ThemeContext";
 import { useProfileShell } from "@/context/ProfileShellContext";
 import LoadingOwnerChrome from "@/components/LoadingOwnerChrome";
@@ -31,30 +40,39 @@ export default function PageViewLoading() {
   // Card navigation writes the live theme into the snapshot before the flight.
   // Document loads already have public branding from the profile layout; use
   // it before hydration as well, without changing viewport scrolling to load.
-  const dashHex = normalizeHex(
+  const knownDash = normalizeHex(
     snapshot?.dashHex || shell?.dashHex || persisted?.dashHex,
-    "#3b3b3b",
+    "",
   );
-  const backHex = normalizeHex(
+  const knownBack = normalizeHex(
     snapshot?.backHex || shell?.backHex || persisted?.backHex,
-    "#cccccc",
+    "",
   );
+  const dashHex = cssThemeFill(knownDash, THEME_DASH_CSS);
+  const backHex = cssThemeFill(knownBack, THEME_BACK_CSS);
+  const dashMath = knownDash || LOADING_FALLBACK_HEX;
+  const backMath = knownBack || LOADING_RGBA_FALLBACK_HEX;
   const posts = snapshot?.posts?.length ? snapshot.posts : [];
   const postGridClass = postGridClassFor(snapshot?.gridCols);
 
   return (
     <div
       className="min-h-screen w-full p-0 md:px-6 overscroll-none flex flex-col"
-      style={{ backgroundColor: hexToRgba(backHex, 0.5, LOADING_RGBA_FALLBACK_HEX) }}
+      style={{
+        backgroundColor: knownBack
+          ? hexToRgba(backMath, 0.5, LOADING_RGBA_FALLBACK_HEX)
+          : backHex,
+      }}
     >
       <header
         className="sticky top-0 left-0 right-0 z-40 shadow-md"
         style={{
           backgroundColor: dashHex,
+          width: "100%",
           paddingTop: "env(safe-area-inset-top, 0px)",
           marginTop: "-4px",
           paddingBottom: "4px",
-          "--focus-ring": focusRingOn(dashHex),
+          "--focus-ring": focusRingOn(dashMath),
         }}
       >
         <div className="flex items-center justify-between min-h-[52px] sm:min-h-[64px] px-4 sm:px-6">
@@ -65,7 +83,7 @@ export default function PageViewLoading() {
             {snapshot?.pageTitle ? (
               <h1
                 className="text-xl sm:text-2xl font-bold tracking-wide truncate"
-                style={{ color: readableInkOn(dashHex) }}
+                style={{ color: readableInkOn(dashMath) }}
               >
                 {snapshot.pageTitle}
               </h1>
@@ -83,7 +101,7 @@ export default function PageViewLoading() {
         <div className="w-full pb-[2px]" style={{ backgroundColor: dashHex }}>
           <div
             className="h-[8px] w-full border-t border-black/15"
-            style={{ backgroundColor: lighten(dashHex, 30, LOADING_FALLBACK_HEX) }}
+            style={{ backgroundColor: lighten(dashMath, 30, LOADING_FALLBACK_HEX) }}
           />
         </div>
       </header>
@@ -95,7 +113,11 @@ export default function PageViewLoading() {
             ? "pt-[33px]"
             : "pt-[calc(33px*1.5)]"
         }`}
-        style={{ backgroundColor: hexToRgba(backHex, 1, LOADING_RGBA_FALLBACK_HEX) }}
+        style={{
+          backgroundColor: knownBack
+            ? hexToRgba(backMath, 1, LOADING_RGBA_FALLBACK_HEX)
+            : backHex,
+        }}
       >
         <div className="max-w-7xl mx-auto w-full">
           {posts.length > 0 && hasVisibleInfo(snapshot?.infoText1) ? (
@@ -103,7 +125,7 @@ export default function PageViewLoading() {
               <PageInfoView
                 value={snapshot.infoText1}
                 mode={snapshot.infoMode1}
-                backHex={backHex}
+                backHex={backMath}
                 initialHeight={snapshot.infoHeight1}
                 onHeight={(height) => {
                   const current = getPageSnapshot(usernameTag, pageSlug);

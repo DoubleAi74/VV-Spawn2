@@ -14,7 +14,15 @@ import {
   setDashboardSnapshot,
 } from "@/lib/routeTransitionCache";
 import { useDashboardSnapshot } from "@/lib/useRouteSnapshot";
-import { normalizeHex, lighten, readableInkOn, focusRingOn } from "@/lib/colour";
+import {
+  normalizeHex,
+  lighten,
+  readableInkOn,
+  focusRingOn,
+  cssThemeFill,
+  THEME_DASH_CSS,
+  THEME_BACK_CSS,
+} from "@/lib/colour";
 import { readPersistedTheme } from "@/context/ThemeContext";
 import { useProfileShell } from "@/context/ProfileShellContext";
 import DashboardContent from "@/components/dashboard/DashboardContent";
@@ -36,14 +44,18 @@ export default function DashboardSkeleton() {
   const hasSnapshotCards =
     Array.isArray(snapshot?.pages) && snapshot.pages.length > 0;
 
-  const dashHex = normalizeHex(
+  const knownDash = normalizeHex(
     snapshot?.dashHex || shell?.dashHex || persisted?.dashHex,
-    "#3b3b3b",
+    "",
   );
-  const backHex = normalizeHex(
+  const knownBack = normalizeHex(
     snapshot?.backHex || shell?.backHex || persisted?.backHex,
-    "#cccccc",
+    "",
   );
+  const dashHex = cssThemeFill(knownDash, THEME_DASH_CSS);
+  const backHex = cssThemeFill(knownBack, THEME_BACK_CSS);
+  const dashMath = knownDash || LOADING_FALLBACK_HEX;
+  const backMath = knownBack || "#e5e7eb";
   const pages = hasSnapshotCards ? snapshot.pages : [];
   const usernameTitle = snapshot?.usernameTitle || shell?.usernameTitle;
 
@@ -56,14 +68,15 @@ export default function DashboardSkeleton() {
       className="dashboard-shell overscroll-none flex flex-col"
       style={{ backgroundColor: backHex }}
     >
-      <DashboardChrome backHex={backHex}>
+      <DashboardChrome dashHex={dashHex}>
         <div className="relative">
           <header
             className="left-0 right-0 z-40 border-b border-black/10 shadow-sm"
             style={{
               backgroundColor: dashHex,
+              width: "100%",
               paddingTop: "env(safe-area-inset-top, 0px)",
-              "--focus-ring": focusRingOn(dashHex),
+              "--focus-ring": focusRingOn(dashMath),
             }}
           >
             <div className="w-full px-4 sm:px-8">
@@ -72,7 +85,7 @@ export default function DashboardSkeleton() {
                   {usernameTitle ? (
                     <h1
                       className="min-w-0 text-[22px] sm:text-4xl font-extrabold tracking-tight drop-shadow sm:pr-2 leading-tight break-words sm:truncate"
-                      style={{ color: readableInkOn(dashHex) }}
+                      style={{ color: readableInkOn(dashMath) }}
                     >
                       {usernameTitle}
                     </h1>
@@ -91,7 +104,7 @@ export default function DashboardSkeleton() {
             <div className="w-full pb-[5px]" style={{ backgroundColor: dashHex }}>
               <div
                 className="h-[8px] w-full border-t border-black/15"
-                style={{ backgroundColor: lighten(dashHex, 30, LOADING_FALLBACK_HEX) }}
+                style={{ backgroundColor: lighten(dashMath, 30, LOADING_FALLBACK_HEX) }}
               />
             </div>
           </header>
@@ -101,6 +114,7 @@ export default function DashboardSkeleton() {
       <DashboardContent
         backHex={backHex}
         loading={!hasSnapshotCards}
+        revealKey={usernameTag ? `dashboard:${usernameTag}` : undefined}
         className={`w-full flex flex-col px-[10px] md:px-8 pb-72 ${
           pages.length > 0 && hasVisibleInfo(snapshot?.infoText1)
             ? "pt-[1.8rem]"
@@ -112,7 +126,7 @@ export default function DashboardSkeleton() {
             <PageInfoView
               value={snapshot.infoText1}
               mode={snapshot.infoMode1}
-              backHex={backHex}
+              backHex={backMath}
               title="Dashboard info"
               initialHeight={snapshot.infoHeight1}
               className="w-full block"
@@ -146,7 +160,7 @@ export default function DashboardSkeleton() {
             <PageInfoView
               value={snapshot.infoText}
               mode={snapshot.infoMode}
-              backHex={backHex}
+              backHex={backMath}
               title="Dashboard info"
               initialHeight={snapshot.infoHeight}
               className="w-full block"

@@ -373,7 +373,7 @@ export default function DashboardViewClient({
         "--focus-ring": focusRingOn(backHex),
       }}
     >
-      <DashboardChrome backHex={backHex}>
+      <DashboardChrome dashHex={dashHex}>
         <DashHeader
           usernameTitle={user.usernameTitle}
           usernameTag={user.usernameTag}
@@ -389,6 +389,7 @@ export default function DashboardViewClient({
 
       <DashboardContent
         backHex={backHex}
+        revealKey={user.usernameTag ? `dashboard:${user.usernameTag}` : undefined}
         className={`w-full flex-1 flex flex-col px-[10px] md:px-8 pb-72 ${
           (isOwner && isEditMode) || hasVisibleInfo(infoText1)
             ? "pt-[1.8rem]"

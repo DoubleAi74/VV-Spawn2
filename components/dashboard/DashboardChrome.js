@@ -7,7 +7,7 @@ import { useLayoutEffect, useRef, useState } from "react";
  * Sticky flex items there can sit under the URL bar or drop out of flow
  * after the title wraps; fixed + an in-flow spacer does not.
  */
-export default function DashboardChrome({ backHex, children }) {
+export default function DashboardChrome({ dashHex, children }) {
   const chromeRef = useRef(null);
   const [height, setHeight] = useState(0);
 
@@ -58,13 +58,16 @@ export default function DashboardChrome({ backHex, children }) {
     <>
       <div
         className="dashboard-chrome-spacer"
-        style={height > 0 ? { height } : undefined}
+        style={{
+          backgroundColor: dashHex,
+          ...(height > 0 ? { height } : {}),
+        }}
         aria-hidden="true"
       />
       <div
         ref={chromeRef}
         className="dashboard-chrome"
-        style={{ backgroundColor: backHex }}
+        style={{ backgroundColor: dashHex, width: "100%" }}
       >
         {children}
       </div>

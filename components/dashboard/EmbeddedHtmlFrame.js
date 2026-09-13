@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
-import { fitHtmlFrame } from '@/lib/fitHtmlFrame';
+import { fitHtmlFrame, INFO_FRAME_MIN_HEIGHT } from '@/lib/fitHtmlFrame';
 
 const BLANK_BASE = '<base target="_blank">';
 
@@ -46,6 +46,10 @@ export default function EmbeddedHtmlFrame({
   const startHeight = Number(initialHeight);
   const knownHeight =
     Number.isFinite(startHeight) && startHeight > 0 ? Math.round(startHeight) : 0;
+  // Read inside the effect without re-attaching the observers every time a
+  // fit reports a new height back up to the snapshot.
+  const knownHeightRef = useRef(knownHeight);
+  knownHeightRef.current = knownHeight;
   const [measuredHeight, setMeasuredHeight] = useState(null);
 
   const fit = useCallback(() => {
@@ -102,6 +106,11 @@ export default function EmbeddedHtmlFrame({
     // Hydration may happen after srcdoc has already loaded. In that case fit
     // before React's next paint; otherwise the load handler does the first fit.
     detach = attach();
+    // srcdoc has not parsed yet. A height this frame measured on an earlier
+    // mount is a better placeholder than the pending flag, which holds the
+    // dashboard's loading cover over content that is otherwise ready. The real
+    // measurement still corrects it once the load handler fires.
+    if (!detach && knownHeightRef.current) setMeasuredHeight(knownHeightRef.current);
     return () => {
       frame.removeEventListener('load', onLoad);
       detach?.();
@@ -119,8 +128,8 @@ export default function EmbeddedHtmlFrame({
       aria-busy={measuredHeight === null}
       className="block w-full border-0 bg-transparent"
       style={{
-        minHeight: 40,
-        height: measuredHeight ?? (knownHeight || 40),
+        minHeight: INFO_FRAME_MIN_HEIGHT,
+        height: measuredHeight ?? (knownHeight || INFO_FRAME_MIN_HEIGHT),
         overflow: 'hidden',
       }}
     />
