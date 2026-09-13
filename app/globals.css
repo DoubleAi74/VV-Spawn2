@@ -34,11 +34,26 @@ iframe[data-info-pending] {
 .dashboard-shell {
   min-height: 100vh;
   min-height: 100svh;
+  /* Title wrap / iframe fit must not shift scrollY and hide the header. */
+  overflow-anchor: none;
+}
+
+/* Sticky flex item: do not grow/shrink, and stay above the isolated body. */
+.dashboard-sticky-chrome {
+  position: -webkit-sticky;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  flex: 0 0 auto;
+  width: 100%;
+  isolation: isolate;
+  overflow-anchor: none;
 }
 
 .dashboard-body {
   position: relative;
-  flex: 1;
+  z-index: 0;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   min-width: 0;

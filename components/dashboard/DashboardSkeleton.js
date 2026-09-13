@@ -57,12 +57,12 @@ export default function DashboardSkeleton() {
     >
       {/* Match the live sticky wrapper and title slot through the handoff. */}
       <div
-        className="sticky top-0 left-0 right-0 z-50"
+        className="dashboard-sticky-chrome"
         style={{ backgroundColor: backHex }}
       >
         <div className="relative">
           <header
-            className="left-0 right-0 z-40 border-b border-black/10 backdrop-blur-md shadow-sm"
+            className="left-0 right-0 z-40 border-b border-black/10 shadow-sm"
             style={{
               backgroundColor: dashHex,
               paddingTop: "env(safe-area-inset-top, 0px)",
@@ -74,7 +74,7 @@ export default function DashboardSkeleton() {
                 <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
                   {usernameTitle ? (
                     <h1
-                      className="min-w-0 text-[22px] sm:text-4xl font-extrabold tracking-tight drop-shadow sm:pr-2 leading-tight [overflow-wrap:anywhere] [text-wrap:balance] sm:truncate sm:[text-wrap:nowrap]"
+                      className="min-w-0 text-[22px] sm:text-4xl font-extrabold tracking-tight drop-shadow sm:pr-2 leading-tight break-words sm:truncate"
                       style={{ color: readableInkOn(dashHex) }}
                     >
                       {usernameTitle}

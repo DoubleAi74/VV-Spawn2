@@ -119,7 +119,7 @@ export default function DashHeader({
   return (
     <div className="relative">
     <header
-      className="left-0 right-0 z-40 border-b border-black/10 backdrop-blur-md shadow-sm"
+      className="left-0 right-0 z-40 border-b border-black/10 shadow-sm"
       style={{
         backgroundColor: dashHex,
         paddingTop: "env(safe-area-inset-top, 0px)",
