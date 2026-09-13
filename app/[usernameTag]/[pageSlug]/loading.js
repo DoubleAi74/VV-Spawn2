@@ -9,7 +9,6 @@ import {
 } from "@/lib/routeTransitionCache";
 import { usePageSnapshot } from "@/lib/useRouteSnapshot";
 import {
-  normalizeHex,
   lighten,
   hexToRgba,
   readableInkOn,
@@ -19,6 +18,7 @@ import {
   THEME_BACK_CSS,
 } from "@/lib/colour";
 import { readPersistedTheme } from "@/context/ThemeContext";
+import { resolvePaintTheme } from "@/lib/themeResolve";
 import { useProfileShell } from "@/context/ProfileShellContext";
 import LoadingOwnerChrome from "@/components/LoadingOwnerChrome";
 import PageInfoView, { hasVisibleInfo } from "@/components/page/PageInfoView";
@@ -40,14 +40,9 @@ export default function PageViewLoading() {
   // Card navigation writes the live theme into the snapshot before the flight.
   // Document loads already have public branding from the profile layout; use
   // it before hydration as well, without changing viewport scrolling to load.
-  const knownDash = normalizeHex(
-    snapshot?.dashHex || shell?.dashHex || persisted?.dashHex,
-    "",
-  );
-  const knownBack = normalizeHex(
-    snapshot?.backHex || shell?.backHex || persisted?.backHex,
-    "",
-  );
+  const painted = resolvePaintTheme({ snapshot, shell, persisted });
+  const knownDash = painted.dashHex;
+  const knownBack = painted.backHex;
   const dashHex = cssThemeFill(knownDash, THEME_DASH_CSS);
   const backHex = cssThemeFill(knownBack, THEME_BACK_CSS);
   const dashMath = knownDash || LOADING_FALLBACK_HEX;

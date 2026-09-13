@@ -15,7 +15,6 @@ import {
 } from "@/lib/routeTransitionCache";
 import { useDashboardSnapshot } from "@/lib/useRouteSnapshot";
 import {
-  normalizeHex,
   lighten,
   readableInkOn,
   focusRingOn,
@@ -24,6 +23,7 @@ import {
   THEME_BACK_CSS,
 } from "@/lib/colour";
 import { readPersistedTheme } from "@/context/ThemeContext";
+import { resolvePaintTheme } from "@/lib/themeResolve";
 import { useProfileShell } from "@/context/ProfileShellContext";
 import DashboardContent from "@/components/dashboard/DashboardContent";
 import DashboardChrome from "@/components/dashboard/DashboardChrome";
@@ -44,14 +44,9 @@ export default function DashboardSkeleton() {
   const hasSnapshotCards =
     Array.isArray(snapshot?.pages) && snapshot.pages.length > 0;
 
-  const knownDash = normalizeHex(
-    snapshot?.dashHex || shell?.dashHex || persisted?.dashHex,
-    "",
-  );
-  const knownBack = normalizeHex(
-    snapshot?.backHex || shell?.backHex || persisted?.backHex,
-    "",
-  );
+  const painted = resolvePaintTheme({ snapshot, shell, persisted });
+  const knownDash = painted.dashHex;
+  const knownBack = painted.backHex;
   const dashHex = cssThemeFill(knownDash, THEME_DASH_CSS);
   const backHex = cssThemeFill(knownBack, THEME_BACK_CSS);
   const dashMath = knownDash || LOADING_FALLBACK_HEX;

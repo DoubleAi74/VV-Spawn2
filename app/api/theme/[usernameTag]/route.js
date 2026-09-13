@@ -13,6 +13,7 @@ export async function GET(request, { params }) {
     {
       dashHex: theme.dashboard?.dashHex || "#2d3e50",
       backHex: theme.dashboard?.backHex || "#e5e7eb",
+      updatedAt: Number(theme.dashboard?.themeUpdatedAt) || 0,
     },
     {
       headers: {

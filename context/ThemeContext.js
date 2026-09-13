@@ -2,6 +2,8 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { normalizeHex } from '@/lib/colour';
+import { remoteThemeIsCurrent } from '@/lib/themeResolve';
+import { patchStoredTheme } from '@/lib/routeTransitionCache';
 
 const ThemeContext = createContext(null);
 
@@ -17,7 +19,12 @@ export function readPersistedTheme(storageKey) {
     const dashHex = normalizeHex(parsed?.dashHex, '');
     const backHex = normalizeHex(parsed?.backHex, '');
     if (!dashHex && !backHex) return null;
-    return { dashHex, backHex };
+    const updatedAt = Number(parsed?.updatedAt);
+    return {
+      dashHex,
+      backHex,
+      updatedAt: Number.isFinite(updatedAt) && updatedAt > 0 ? updatedAt : 0,
+    };
   } catch {
     return null;
   }
@@ -42,6 +49,10 @@ export function ThemeProvider({ children, initialDashHex, initialBackHex, storag
   // switch this on; see useThemeSync.
   const [syncEnabled, setSyncEnabled] = useState(false);
   const localHoldUntilRef = useRef(0);
+  const persistedAtRef = useRef(0);
+  const skipWriteRef = useRef(true);
+  const skipVarsRef = useRef(false);
+  const skipNextInitialRef = useRef(true);
   const persistedKey = useMemo(
     () => (storageKey ? `${THEME_STORAGE_PREFIX}${storageKey}` : ''),
     [storageKey]
@@ -64,47 +75,62 @@ export function ThemeProvider({ children, initialDashHex, initialBackHex, storag
     if (safeBack) setBackHexState((current) => (current === safeBack ? current : safeBack));
   }, []);
 
-  useEffect(() => {
-    if (!persistedKey) return;
-    try {
-      const raw = window.localStorage.getItem(persistedKey);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      applyTheme(parsed?.dashHex, parsed?.backHex);
-    } catch {
-      // Ignore malformed local storage payloads.
+  useLayoutEffect(() => {
+    if (!storageKey) return undefined;
+    const persisted = readPersistedTheme(storageKey);
+    if (persisted) {
+      persistedAtRef.current = persisted.updatedAt;
+      applyTheme(persisted.dashHex, persisted.backHex);
+      writeThemeVars(persisted.dashHex, persisted.backHex);
+      skipVarsRef.current = true;
     }
-    // Intentionally run once per key so server props can be overridden by freshest client value.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [persistedKey]);
+    skipWriteRef.current = true;
+    return undefined;
+  }, [persistedKey, storageKey, applyTheme]);
 
-  const skipNextInitialRef = useRef(true);
   useEffect(() => {
-    // First run would overwrite the localStorage apply above with whatever the
-    // RSC payload still has — often the colour from before the last save.
+    // RSC / history payloads have no write time. A local save always wins.
     if (skipNextInitialRef.current) {
       skipNextInitialRef.current = false;
       return;
     }
     if (Date.now() < localHoldUntilRef.current) return;
+    if (persistedAtRef.current) return;
     applyTheme(initialDashHex, initialBackHex);
   }, [initialDashHex, initialBackHex, applyTheme]);
 
   useLayoutEffect(() => {
+    if (skipVarsRef.current) {
+      skipVarsRef.current = false;
+      return;
+    }
     writeThemeVars(dashHex, backHex);
   }, [dashHex, backHex]);
 
   useEffect(() => {
     if (!persistedKey) return;
+    if (skipWriteRef.current) {
+      skipWriteRef.current = false;
+      return;
+    }
+    const existing = readPersistedTheme(storageKey);
+    if (existing && existing.updatedAt > persistedAtRef.current) {
+      persistedAtRef.current = existing.updatedAt;
+      applyTheme(existing.dashHex, existing.backHex);
+      return;
+    }
+    const now = Date.now();
     try {
       window.localStorage.setItem(
         persistedKey,
-        JSON.stringify({ dashHex, backHex, updatedAt: Date.now() })
+        JSON.stringify({ dashHex, backHex, updatedAt: now })
       );
+      persistedAtRef.current = now;
+      patchStoredTheme(storageKey, dashHex, backHex);
     } catch {
       // Ignore storage write failures.
     }
-  }, [persistedKey, dashHex, backHex]);
+  }, [persistedKey, storageKey, dashHex, backHex, applyTheme]);
 
   useEffect(() => {
     if (!persistedKey) return;
@@ -114,17 +140,30 @@ export function ThemeProvider({ children, initialDashHex, initialBackHex, storag
 
       try {
         const parsed = JSON.parse(event.newValue);
+        const updatedAt = Number(parsed?.updatedAt);
+        if (Number.isFinite(updatedAt) && updatedAt > 0) {
+          persistedAtRef.current = updatedAt;
+        }
         applyTheme(parsed?.dashHex, parsed?.backHex);
       } catch {
         // Ignore malformed storage payloads.
       }
     }
 
+    function handlePageShow() {
+      const persisted = readPersistedTheme(storageKey);
+      if (!persisted) return;
+      persistedAtRef.current = persisted.updatedAt;
+      applyTheme(persisted.dashHex, persisted.backHex);
+    }
+
     window.addEventListener('storage', handleStorage);
+    window.addEventListener('pageshow', handlePageShow);
     return () => {
       window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('pageshow', handlePageShow);
     };
-  }, [persistedKey, applyTheme]);
+  }, [persistedKey, storageKey, applyTheme]);
 
   useEffect(() => {
     if (!storageKey || !syncEnabled) return;
@@ -155,7 +194,10 @@ export function ThemeProvider({ children, initialDashHex, initialBackHex, storag
         // which is when the poll starts and when someone reaches for the
         // picker.
         if (Date.now() < localHoldUntilRef.current) return;
+        const persisted = readPersistedTheme(storageKey);
+        if (!remoteThemeIsCurrent(data?.updatedAt, persisted?.updatedAt)) return;
         applyTheme(data?.dashHex, data?.backHex);
+        if (Number(data?.updatedAt) > 0) persistedAtRef.current = Number(data.updatedAt);
       } catch {
         // Ignore background sync failures.
       }

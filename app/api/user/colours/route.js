@@ -14,5 +14,9 @@ export async function PATCH(request) {
 
   const user = await updateUserColours(session.user.userId, dashHex, backHex);
   await revalidateAllUserThemePaths(session.user.userId, session.user.usernameTag);
-  return NextResponse.json({ dashHex: user.dashboard.dashHex, backHex: user.dashboard.backHex });
+  return NextResponse.json({
+    dashHex: user.dashboard.dashHex,
+    backHex: user.dashboard.backHex,
+    updatedAt: Number(user.dashboard.themeUpdatedAt) || Date.now(),
+  });
 }
